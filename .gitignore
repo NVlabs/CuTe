@@ -1,0 +1,13 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments
+*.egg-info
+.env
+.venv
+env/
+venv/
+env.bak/
+venv.bak/

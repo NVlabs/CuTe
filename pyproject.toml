@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pycute"
+version = "0.1.0"
+description = "A pure-Python reference implementation of CuTe — the layout and tensor algebra at the heart of CUTLASS 3.x and the CuTe DSL."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [{ name = "NVIDIA Corporation" }]
+keywords = ["cute", "cutlass", "layout", "tensor", "gpu", "cuda", "linear-algebra"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering",
+  "Topic :: Software Development :: Libraries",
+]
+
+# The core layout algebra has no third-party runtime dependencies.
+dependencies = []
+
+[project.optional-dependencies]
+# Visualization / printing helpers (pycute.util): print_table needs tabulate,
+# draw_svg/draw_svg_tv need svgwrite. The draw_latex/draw_latex_tv
+# helpers need no Python packages -- only a system LaTeX install (pdflatex) for
+# the optional PDF step.
+viz = ["svgwrite", "tabulate"]
+# Symbolic shapes/strides (e.g. sympy-backed Integer values)
+symbolic = ["sympy"]
+# Everything needed to run the full test suite (test/, examples/)
+test = ["pytest>=7", "svgwrite", "tabulate", "sympy"]
+
+[project.urls]
+Homepage = "https://github.com/NVlabs/CuTe"
+
+[tool.setuptools.packages.find]
+include = ["pycute*"]
+
+[tool.pytest.ini_options]
+# Test suites live in `test/` and the `examples/` scripts.
+testpaths = ["test", "examples"]
+# Put the repository root on sys.path so `from pycute import *` and
+# `from example.einsum import ...` resolve without an editable install.
+pythonpath = ["."]
+addopts = "-ra"
