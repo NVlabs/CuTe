@@ -37,7 +37,7 @@ def congruent(a: Profile, b: Profile) -> bool:
   if hasattr(b, '_congruent'): return b._congruent(a)
 
   if is_tuple(a) and is_tuple(b):
-    return len(a) == len(b) and reduce(operator.and_, [congruent(i,j) for i,j in zip(a,b)], True)
+    return len(a) == len(b) and all(congruent(i,j) for i,j in zip(a,b))
   return not (is_tuple(a) or is_tuple(b))
 
 
@@ -66,7 +66,7 @@ def weakly_congruent(a: Profile, b: Profile) -> bool:
   if hasattr(a, '_weakly_congruent'): return a._weakly_congruent(b)
 
   if is_tuple(a) and is_tuple(b):
-    return len(a) == len(b) and reduce(operator.and_, [weakly_congruent(i,j) for i,j in zip(a,b)])
+    return len(a) == len(b) and all(weakly_congruent(i,j) for i,j in zip(a,b))
   return not is_tuple(a)
 
 
