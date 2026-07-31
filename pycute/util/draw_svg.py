@@ -5,9 +5,11 @@
 Utilities for SVG generation of CuTe Layouts
 """
 
+from typing import Union
+
 from pycute import *
 
-from .draw_colors import index_grey_8x, thread_color_8x
+from .draw_colors import thread_color_8x, white
 
 
 def _draw_index_labels(dwg, M, N, cell_size, margin):
@@ -19,15 +21,15 @@ def _draw_index_labels(dwg, M, N, cell_size, margin):
   for m in range(M):
     dwg.add(dwg.text(
       str(m), insert=(margin//2, margin + m*cell_size + cell_size//2),
-      dy=["0.35em"], text_anchor="middle", font_size="10px"))
+      dy=["0.35em"], text_anchor="middle", font_size="8px", font_family="monospace"))
   # Column indices, across the top margin
   for n in range(N):
     dwg.add(dwg.text(
       str(n), insert=(margin + n*cell_size + cell_size//2, margin//2),
-      dy=["0.35em"], text_anchor="middle", font_size="10px"))
+      dy=["0.35em"], text_anchor="middle", font_size="8px", font_family="monospace"))
 
 
-def draw_svg(layout : LayoutBase, filename="layout.svg", color=index_grey_8x):
+def draw_svg(tensor : Union[Tensor, LayoutBase], filename="layout.svg", color=white):
   try:
     import svgwrite
   except ImportError as e:
@@ -36,15 +38,19 @@ def draw_svg(layout : LayoutBase, filename="layout.svg", color=index_grey_8x):
       "Install it with `pip install svgwrite` or `pip install pycute[viz]`."
     ) from e
 
-  if rank(layout) != 2:
-    raise ValueError(f"Expected a rank-2 Layout")
+  if isinstance(tensor, LayoutBase):
+    tensor = Tensor(ImplicitAccessor(0), tensor)
+  if rank(tensor) == 1:
+    tensor = Tensor(tensor.accessor, make_layout([Layout(1,0), tensor.layout]))
+  if rank(tensor) != 2:
+    raise ValueError(f"Expected a rank-2 Layout, got {tensor.layout}")
 
   # Cell size in pixels, with a one-cell margin for the index labels
   cell_size = 20
   margin = cell_size
 
   # Grid size
-  M, N = size[0](layout), size[1](layout)
+  M, N = size[0](tensor), size[1](tensor)
 
   # Create SVG canvas
   dwg = svgwrite.Drawing(filename, size=(margin + N*cell_size, margin + M*cell_size))
@@ -52,19 +58,21 @@ def draw_svg(layout : LayoutBase, filename="layout.svg", color=index_grey_8x):
   # Draw grid cells
   for i in range(M):
     for j in range(N):
-      idx = int(layout(i, j))
+      # Label by the value, color by the offset
+      value  = tensor[i, j]
+      offset = tensor.layout(i, j)
       x = margin + j * cell_size
       y = margin + i * cell_size
 
       # Draw rectangle
       dwg.add(dwg.rect(
         insert=(x, y), size=(cell_size, cell_size),
-        fill=svgwrite.rgb(*color(idx), mode='RGB'), stroke='black'))
+        fill=svgwrite.rgb(*color(offset), mode='RGB'), stroke='black'))
 
       # Add label text
       dwg.add(dwg.text(
-        str(idx), insert=(x + cell_size//2, y + cell_size//2),
-        dy=["0.35em"], text_anchor="middle", font_size="8px"))
+        str(value), insert=(x + cell_size//2, y + cell_size//2),
+        dy=["0.35em"], text_anchor="middle", font_size="10px", font_family="Arial"))
 
   _draw_index_labels(dwg, M, N, cell_size, margin)
 
@@ -130,10 +138,10 @@ def draw_svg_tv(layout : LayoutBase, tile_mn=None, filename="tvlayout.svg", colo
       # Add label text
       dwg.add(dwg.text(
         f"T{tid}", insert=(x + cell_size//2, y + 1*cell_size//4),
-        dy=["0.35em"], text_anchor="middle", font_size="8px"))
+        dy=["0.35em"], text_anchor="middle", font_size="8px", font_family="Arial"))
       dwg.add(dwg.text(
         f"V{vid}", insert=(x + cell_size//2, y + 3*cell_size//4),
-        dy=["0.35em"], text_anchor="middle", font_size="8px"))
+        dy=["0.35em"], text_anchor="middle", font_size="8px", font_family="Arial"))
 
   _draw_index_labels(dwg, M, N, cell_size, margin)
 

@@ -926,11 +926,13 @@ unless `print_type=False`. For non-rank-2 inputs, falls back to a plain
 Source: [`pycute/util/draw_svg.py`](../pycute/util/draw_svg.py). Requires
 [`svgwrite`](https://pypi.org/project/svgwrite/).
 
-### `draw_svg(layout, filename="layout.svg", color=index_grey_8x)`
+### `draw_svg(tensor, filename="layout.svg", color=white)`
 
-Save a rank-2 layout as a colored SVG table (with row/column index labels).
-`color` is a functor `color(idx) -> (r, g, b)` (RGB-255 tuple) keyed on the
-cell offset; it defaults to `index_grey_8x` (greyscale shading by `offset % 8`).
+Save a rank-2 `Tensor` or `Layout` as an SVG table (with row/column index
+labels); a rank-1 input is drawn as a single row. Like `print_tensor`, either
+input is accepted: a `Layout` labels each cell with its offset, a `Tensor` with
+the element stored there. `color` is a functor `color(idx) -> (r, g, b)`
+(RGB-255 tuple) keyed on the cell offset; it defaults to `white`.
 
 ### `draw_svg_tv(layout, tile_mn=None, filename="tvlayout.svg", color=thread_color_8x)`
 
@@ -948,13 +950,13 @@ defaults to `thread_color_8x` (coloring by `tid % 8`).
 Source: [`pycute/util/draw_latex.py`](../pycute/util/draw_latex.py). Needs
 no Python packages; PDF output requires a LaTeX install (`pdflatex`).
 
-### `draw_latex(layout, filename="layout.tex", compile_pdf=True, color=index_grey_8x)`
+### `draw_latex(tensor, filename="layout.tex", compile_pdf=True, color=white)`
 
 LaTeX/PDF analogue of `draw_svg`: write a standalone TikZ document for a
-rank-2 layout and (by default) compile it to a cropped PDF with `pdflatex`.
+rank-2 `Tensor` or `Layout` (rank-1 becomes a single row) and (by default)
+compile it to a cropped PDF with `pdflatex`.
 Mirrors `cute::print_latex`. `color` is a functor `color(idx) -> (r, g, b)`
-(same contract as `draw_svg`), defaulting to `index_grey_8x` (greyscale
-shading by `offset % 8`).
+(same contract as `draw_svg`), defaulting to `white`.
 
 ### `draw_latex_tv(layout, tile_mn=None, filename="tvlayout.tex", compile_pdf=True, color=thread_color_8x)`
 
@@ -976,8 +978,8 @@ in `[0, 255]`. Offset functors take `color(idx)`; thread-value functors take
 
 ### `index_grey_8x(idx)`
 
-Offset coloring: greyscale shade by `idx % 8`. The default `color` of
-`draw_svg` / `draw_latex`.
+Offset coloring: greyscale shade by `idx % 8`. Offset functors coerce `idx`
+with `int()`, so `F2`-strided layouts color correctly.
 
 ### `bank_color_8x(idx)` / `bank_color_16x(idx)` / `bank_color_32x(idx)`
 
@@ -1002,7 +1004,7 @@ Thread-value coloring: color by warp `(tid // 32) % 8` (32 threads per warp).
 ### `white(*args)`
 
 Constant white `(255, 255, 255)`; ignores its key, so it is valid for either
-functor signature.
+functor signature. The default `color` of `draw_svg` / `draw_latex`.
 
 ### `constant(rgb)`
 
@@ -1039,7 +1041,7 @@ is the authoritative source. Each PyCuTe test defines a
 | [`test_nullspace.py`](../test/test_nullspace.py) | `nullspace` post-condition |
 | [`test_recast.py`](../test/test_recast.py) | `recast` for integer and `Fraction` scales, scalar/vector/matrix/nested layouts |
 | [`test_swizzle.py`](../test/test_swizzle.py) | `F2` arithmetic (XOR-as-addition, scalar multiplication, self-inverse), `Swizzle` (XOR pattern, involution, constructor validation), F2-stride layouts |
-| [`test_tensor.py`](../test/test_tensor.py) | `Tensor` construction, three-coordinate-form indexing, `__getitem__`/`__setitem__`, slicing returning sub-tensors, tensor algebra pass-through, `Array`/`ArrayView`/`ImplicitAccessor`, `make_tensor`, `identity_tensor` (predication) |
+| [`test_tensor.py`](../test/test_tensor.py) | `Tensor` construction, three-coordinate-form indexing, `__getitem__`/`__setitem__`, slicing returning sub-tensors, tensor algebra pass-through, `Accessor`, `make_tensor`, `identity_tensor` (predication) |
 
 Run them all with:
 

@@ -57,7 +57,7 @@ _spectrum_8  = _spectrum_32[::4]   #  8 evenly-spaced colors
 
 def index_grey_8x(idx):
   """Greyscale shade by ``idx % 8`` -> ``(r, g, b)``; default offset coloring."""
-  return _greyscale_colors[idx % len(_greyscale_colors)]
+  return _greyscale_colors[int(idx) % len(_greyscale_colors)]
 
 
 def bank_color_8x(idx):
@@ -66,7 +66,7 @@ def bank_color_8x(idx):
   Like ``bank_color_32x`` but cycling every 8 -- handy for 8-bank groupings
   or when fewer, more distinct colors read better.
   """
-  return _spectrum_8[idx % len(_spectrum_8)]
+  return _spectrum_8[int(idx) % len(_spectrum_8)]
 
 
 def bank_color_16x(idx):
@@ -74,7 +74,7 @@ def bank_color_16x(idx):
 
   Like ``bank_color_32x`` but cycling every 16.
   """
-  return _spectrum_16[idx % len(_spectrum_16)]
+  return _spectrum_16[int(idx) % len(_spectrum_16)]
 
 
 def bank_color_32x(idx):
@@ -83,24 +83,24 @@ def bank_color_32x(idx):
   Spreads the 32 banks around a light spectrum so equal-bank cells share a
   color -- handy for spotting shared-memory bank conflicts.
   """
-  return _spectrum_32[idx % len(_spectrum_32)]
+  return _spectrum_32[int(idx) % len(_spectrum_32)]
 
 
 # ---- Thread-value colorings: color(tid, vid) -> (r, g, b) ----
 
 def thread_color_8x(tid, vid):
   """Color by ``tid % 8`` -> ``(r, g, b)`` (``vid`` ignored); default TV coloring."""
-  return _tv_colors[tid % len(_tv_colors)]
+  return _tv_colors[int(tid) % len(_tv_colors)]
 
 
 def value_color_8x(tid, vid):
   """Color by value index ``vid % 8`` -> ``(r, g, b)`` (``tid`` ignored)."""
-  return _tv_colors[vid % len(_tv_colors)]
+  return _tv_colors[int(vid) % len(_tv_colors)]
 
 
 def warp_color_8x(tid, vid):
   """Color by warp ``(tid // 32) % 8`` -> ``(r, g, b)`` (32 threads per warp)."""
-  return _tv_colors[(tid // 32) % len(_tv_colors)]
+  return _tv_colors[(int(tid) // 32) % len(_tv_colors)]
 
 
 # ---- Constant / generic ----

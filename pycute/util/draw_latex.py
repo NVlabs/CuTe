@@ -5,9 +5,11 @@
 Utilities for LaTeX/PDF generation of CuTe Layouts
 """
 
+from typing import Union
+
 from pycute import *
 
-from .draw_colors import index_grey_8x, thread_color_8x
+from .draw_colors import thread_color_8x, white
 
 
 _latex_header = (
@@ -75,18 +77,23 @@ def _write_and_compile(body, filename, compile_pdf):
   print(f"Saved as {stem}.pdf")
 
 
-def draw_latex(layout : LayoutBase, filename="layout.tex", compile_pdf=True, color=index_grey_8x):
-  if rank(layout) != 2:
-    raise ValueError(f"Expected a rank-2 Layout")
+def draw_latex(tensor : Union[Tensor, LayoutBase], filename="layout.tex", compile_pdf=True, color=white):
+  if isinstance(tensor, LayoutBase):
+    tensor = Tensor(ImplicitAccessor(0), tensor)
+  if rank(tensor) == 1:
+    tensor = Tensor(tensor.accessor, make_layout([Layout(1,0), tensor.layout]))
+  if rank(tensor) != 2:
+    raise ValueError(f"Expected a rank-2 Layout, got {tensor.layout}")
 
-  M, N = size[0](layout), size[1](layout)
+  M, N = size[0](tensor), size[1](tensor)
 
-  body = f"% Layout: {layout}\n"
+  body = f"% Layout: {tensor.layout}\n"
   for i in range(M):
     for j in range(N):
-      idx = int(layout(i, j))
-      body += (f"\\node[fill={_tikz_rgb(color(idx))}] "
-               f"at ({i},{j}) {{{idx}}};\n")
+      # Label by the value, color by the offset
+      value  = tensor[i, j]
+      offset = tensor.layout(i, j)
+      body += (f"\\node[fill={_tikz_rgb(color(offset))}] at ({i},{j}) {{{value}}};\n")
   body += _grid_and_labels(M, N)
 
   _write_and_compile(body, filename, compile_pdf)

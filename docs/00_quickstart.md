@@ -192,8 +192,9 @@ imported separately from the core algebra:
   rank-4 layout or tensor as nested ASCII tables.
 * [`print_table(t)`](../pycute/util/print_table.py) — render a rank-2
   layout or tensor as a grid table (uses `tabulate` for nicer borders).
-* [`draw_svg(layout)`](../pycute/util/draw_svg.py) — render a rank-2
-  layout as a colored SVG (offsets shaded, with row/column index labels).
+* [`draw_svg(layout)`](../pycute/util/draw_svg.py) — render a rank-2 layout
+  or tensor as an SVG grid (row/column index labels, cells shaded by a
+  `color` functor).
 * [`draw_svg_tv(tv_layout, tile_mn)`](../pycute/util/draw_svg.py) — render a
   thread-value layout (the kind that maps `(thread_id, value_id)` to a
   position in a tile) as an SVG with one cell per `(T, V)` pair.
@@ -204,8 +205,9 @@ imported separately from the core algebra:
   the LaTeX/PDF analogue of `draw_svg_tv`.
 * [`draw_colors`](../pycute/util/draw_colors.py) — a catalog of `color`
   functors (returning `(r, g, b)` tuples) for the drawers above: the defaults
-  `index_grey_8x` / `thread_color_8x`, plus `bank_color_8x`/`16x`/`32x` (bank
-  conflicts), `value_color_8x`, `warp_color_8x`, `white`, and `constant(rgb)`.
+  `white` (layout/tensor drawers) and `thread_color_8x` (thread-value
+  drawers), plus `index_grey_8x`, `bank_color_8x`/`16x`/`32x` (bank
+  conflicts), `value_color_8x`, `warp_color_8x`, and `constant(rgb)`.
   Pass any functor of the matching signature to recolor.
 
 See [Visualization](./07_visualization.md) for examples and the relevant

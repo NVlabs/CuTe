@@ -20,8 +20,10 @@ cover almost all of your debugging and explanation needs:
   annotations.
 * [`draw_colors`](../pycute/util/draw_colors.py) — a small catalog of
   coloring functors (each returns an `(r, g, b)` RGB-255 tuple) shared by
-  the SVG and LaTeX drawers, including the defaults `index_grey_8x(idx)` and
-  `thread_color_8x(tid, vid)`. See [Coloring functors](#coloring-functors).
+  the SVG and LaTeX drawers: `white` (the default for `draw_svg` /
+  `draw_latex`), `thread_color_8x(tid, vid)` (the default for the thread-value
+  drawers), `index_grey_8x(idx)`, and the `bank_color_*` palettes. See
+  [Coloring functors](#coloring-functors).
 
 Every utility lives in [`pycute.util`](../pycute/util/), which is a
 separate import from the core algebra:
@@ -31,7 +33,8 @@ separate import from the core algebra:
 >>> from pycute.util import print_tensor, print_table
 >>> from pycute.util import draw_svg, draw_svg_tv
 >>> from pycute.util import draw_latex, draw_latex_tv
->>> from pycute.util import index_grey_8x, thread_color_8x  # default color functors
+>>> from pycute.util import white, thread_color_8x          # default color functors
+>>> from pycute.util import index_grey_8x, bank_color_32x   # ...and some alternatives
 ```
 
 The split is intentional: the core algebra has no third-party dependencies.
@@ -167,11 +170,10 @@ For non-rank-2 inputs, `print_table` falls back to a plain `print`.
 
 ## `draw_svg`
 
-[`draw_svg(layout, filename="layout.svg", color=index_grey_8x)`](../pycute/util/draw_svg.py)
-produces an SVG file rendering a rank-2 layout as a colored grid, with
-each cell labeled with its offset and (by default) shaded by `offset % 8`
-for visual clustering. Row and column indices are labeled along the left
-and top edges.
+[`draw_svg(tensor, filename="layout.svg", color=white)`](../pycute/util/draw_svg.py)
+produces an SVG file rendering a layout as a grid, with each cell labeled by
+its offset. Row and column indices are labeled along the left and top edges.
+Cells are white by default; pass a `color` functor to shade them.
 
 ```python
 >>> from pycute.util import draw_svg
@@ -182,22 +184,33 @@ Saved as layout.svg
 Saved as mixed.svg
 ```
 
-This renders a colored SVG grid of a rank-2 layout — useful for slides,
-papers, and quick visual inspection. For LaTeX/TikZ output, use
-[`draw_latex`](#draw_latex) below.
+Like [`print_tensor`](#print_tensor), it accepts a `Tensor` as well as a
+`Layout`. A `Tensor` labels each cell with the *element* stored there while
+the color still keys off the offset, so one figure shows both the logical
+contents and where they live:
+
+```python
+>>> T = make_tensor(Layout((4, 8), (1, 4)))
+>>> draw_svg(T, filename="data.svg", color=index_grey_8x)
+Saved as data.svg
+```
+
+This renders an SVG grid — useful for slides, papers, and quick visual
+inspection. For LaTeX/TikZ output, use [`draw_latex`](#draw_latex) below.
 
 The arguments:
 
-* `layout` — any rank-2 `Layout`. `size[0](layout)` rows and
-  `size[1](layout)` columns are drawn.
+* `tensor` — a rank-2 `Tensor` or `Layout`; `size[0]` rows and `size[1]`
+  columns are drawn. A rank-1 input is drawn as a single row.
 * `filename` — defaults to `"layout.svg"`.
 * `color` — a coloring functor `color(idx) -> (r, g, b)` mapping a cell's
-  integer offset to an RGB-255 tuple (each component in `[0, 255]`).
-  Defaults to `index_grey_8x` (greyscale shading by `offset % 8`), which is
-  importable from `pycute.util`.
+  offset to an RGB-255 tuple (each component in `[0, 255]`). Defaults to
+  `white`; the catalog in [Coloring functors](#coloring-functors) covers
+  greyscale and bank palettes. The functors coerce the offset with `int()`,
+  so `F2`-strided (swizzled) layouts color correctly too.
 
-The cell size and font are hardcoded; the palette is controlled by `color`,
-and if you need a different layout/font, copy the function and edit it.
+The cell size and fonts are hardcoded — index labels are monospace, cell
+labels are Arial; the palette is controlled by `color`.
 
 For example, to highlight even versus odd offsets:
 
@@ -270,12 +283,12 @@ Errors raised:
 
 ## `draw_latex`
 
-[`draw_latex(layout, filename="layout.tex", compile_pdf=True, color=index_grey_8x)`](../pycute/util/draw_latex.py)
+[`draw_latex(tensor, filename="layout.tex", compile_pdf=True, color=white)`](../pycute/util/draw_latex.py)
 is the LaTeX/PDF analogue of `draw_svg`. It writes a standalone
-[TikZ](https://tikz.dev/) document rendering a rank-2 layout as a colored
-grid — offsets shaded (by default) by `offset % 8`, with row/column index
-labels — and then compiles it to a cropped PDF with `pdflatex`. The output
-mirrors `cute::print_latex` in C++ CuTe, so it is ideal for slides and papers.
+[TikZ](https://tikz.dev/) document rendering a rank-2 layout as a grid — cells
+labeled by offset and (by default) unshaded, with row/column index labels —
+and then compiles it to a cropped PDF with `pdflatex`. The output mirrors
+`cute::print_latex` in C++ CuTe, so it is ideal for slides and papers.
 
 ```python
 >>> from pycute.util import draw_latex
@@ -286,7 +299,9 @@ Saved as layout.pdf
 
 The arguments:
 
-* `layout` — any rank-2 `Layout`.
+* `tensor` — a rank-2 `Tensor` or `Layout`. As with `draw_svg`, a `Tensor`
+  labels each cell with the element stored there rather than its offset, and
+  a rank-1 input is drawn as a single row.
 * `filename` — the `.tex` path; defaults to `"layout.tex"`. The PDF is
   written next to it with the same stem (`layout.pdf`).
 * `compile_pdf` — when `True` (default), run `pdflatex` to produce the PDF
@@ -294,7 +309,7 @@ The arguments:
   is written.
 * `color` — a coloring functor `color(idx) -> (r, g, b)`, identical in
   contract to `draw_svg`'s `color` (RGB-255 tuple, components in
-  `[0, 255]`). Defaults to `index_grey_8x` (greyscale shading by `offset % 8`).
+  `[0, 255]`). Defaults to `white`.
 
 Unlike `draw_svg`, `draw_latex` needs **no Python packages** — only a LaTeX
 installation (e.g. TeX Live providing `pdflatex`) for the PDF step. If
@@ -336,14 +351,14 @@ catalog of ready-made functors:
 
 | Functor | Signature | Colors by |
 |---|---|---|
-| `index_grey_8x` *(default)* | `color(idx)` | greyscale, `idx % 8` |
+| `white` *(default for `draw_svg` / `draw_latex`)* | either (`*args`) | constant white |
+| `index_grey_8x` | `color(idx)` | greyscale, `idx % 8` |
 | `bank_color_8x` | `color(idx)` | shared-memory bank, `idx % 8` (light spectrum) |
 | `bank_color_16x` | `color(idx)` | shared-memory bank, `idx % 16` (light spectrum) |
 | `bank_color_32x` | `color(idx)` | shared-memory bank, `idx % 32` (light spectrum) |
-| `thread_color_8x` *(default)* | `color(tid, vid)` | thread, `tid % 8` |
+| `thread_color_8x` *(default for the TV drawers)* | `color(tid, vid)` | thread, `tid % 8` |
 | `value_color_8x` | `color(tid, vid)` | value index, `vid % 8` |
 | `warp_color_8x` | `color(tid, vid)` | warp, `(tid // 32) % 8` |
-| `white` | either (`*args`) | constant white |
 | `constant(rgb)` | factory → either | constant `rgb` |
 
 The three `bank_color_*` palettes are evenly-spaced subsamples of one shared
