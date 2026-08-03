@@ -300,7 +300,11 @@ Test: [`test_htuple.py::TestHTuple::test_prefix_product`](../test/test_htuple.py
 
 ### `coshape(obj, mode=())` / `coprofile(obj, mode=())`
 
-Codomain shape and codomain profile of a layout.
+Codomain shape and codomain profile of a layout. `coshape` computes the
+codomain's extents; `coprofile` fixes only its tuple/leaf structure and is
+congruent to `coshape`, not equal to it. Taken straight from the strides,
+`coprofile` needs no extent arithmetic and never interprets a codomain leaf, so
+it stays defined for codomains whose extents `coshape` cannot bound.
 
 ```python
 >>> coshape(Layout((4, 8), (1, 4)))

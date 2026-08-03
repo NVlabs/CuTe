@@ -153,8 +153,9 @@ It also follows the [`HTuple` mode operations](./01_htuple.md):
 ```
 
 `coshape(A)` returns the *codomain* bound: the smallest shape that contains
-every offset `A(c)` for in-bounds coordinates `c`. `coprofile(A)` is an
-alias for `coshape(A)` (same value, same hierarchical profile):
+every offset `A(c)` for in-bounds coordinates `c`. `coprofile(A)` fixes only
+that codomain's hierarchical structure — it is congruent to `coshape(A)`, but
+its leaf values are not the extents:
 
 ```python
 >>> coshape(Layout((4, 8), (1, 4)))

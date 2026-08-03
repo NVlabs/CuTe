@@ -78,6 +78,12 @@ class Layout(LayoutBase):
     result = inner_product(transform_leaf(lambda s: s-1, self.shape), self.stride)
     return as_tuple(result + repeat_like(1, shape(result)))
 
+  def _coprofile(self) -> Profile:
+    """
+    Profile of the layout's codomain.
+    """
+    return as_tuple(sum(leaves(self.stride)))
+
   def __call__(self, *crd: Coord) -> StrideScalar:
     """
     Map a coordinate to the layout's codomain:

@@ -70,17 +70,24 @@ def coshape(obj, mode=()) -> Shape:
   """
   Shape of the codomain
   """
+  if mode != ():
+    return coshape(get(obj, mode))
   if hasattr(obj, '_coshape'):       # Use ._coshape() or ._coshape if available (Layouts/Other)
-    return get(obj._coshape(), mode)
+    return obj._coshape()
   raise TypeError(f"coshape not supported for type {type(obj)}")
 
 
 @ModeOpDecorator
-def coprofile(obj, mode=()) -> Shape:
+def coprofile(obj, mode=()) -> Profile:
   """
-  Profile of the codomain
+  Profile of the codomain: an HTuple congruent to `coshape(obj)` whose leaf values
+  carry no meaning.
   """
-  return coshape(obj, mode)
+  if mode != ():
+    return coprofile(get(obj, mode))
+  if hasattr(obj, '_coprofile'):     # Use ._coprofile() if available (Layouts/Other)
+    return obj._coprofile()
+  raise TypeError(f"coprofile not supported for type {type(obj)}")
 
 
 def _coalesce_z(shape: Shape, stride: Stride) -> tuple[Shape, Stride]:

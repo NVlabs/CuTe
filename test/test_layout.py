@@ -143,6 +143,9 @@ class TestCoshape:
     assert coshape(Layout((4, 8), (E(0), E(1)))) == (4, 8)
     assert coshape(Layout((4, 8), (E(1), E(0)))) == (8, 4)
 
-  def test_coprofile_matches_coshape(self):
-    L = Layout((4, 8), (1, 4))
-    assert coprofile(L) == coshape(L)
+  def test_coprofile_is_congruent_to_coshape(self):
+    """`coprofile` fixes only the codomain's tuple/leaf structure, so its leaf
+    *values* are not the extents -- it is congruent to `coshape`, not equal."""
+    for L in [Layout((4, 8), (1, 4)), Layout(8, 0),
+              Layout((4, 8), (E(0), E(1))), Layout((4, 5), (E(1), E(4, 1)))]:
+      assert congruent(coprofile(L), coshape(L))

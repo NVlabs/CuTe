@@ -473,9 +473,10 @@ codomain.
 
 * `coshape(L)` — for `Layout` objects, returns `as_tuple(L(size(L) - 1) + 1)`
   treating each codomain leaf as a `0..max+1` range.
-* `coprofile(L)` — alias for `coshape`. Used in `complement`,
-  `right_inverse`, and `left_inverse` to know whether they need to produce
-  an integer-codomain or a coordinate-codomain layout.
+* `coprofile(L)` — the codomain's *structure only*, congruent to `coshape(L)`
+  but with meaningless leaf values. Used in `composition`, `complement`,
+  `right_inverse`, and `left_inverse` to know whether they need to produce an
+  integer-codomain or a coordinate-codomain layout.
 
 ```python
 >>> coshape(Layout((4, 8), (1, 4)))
