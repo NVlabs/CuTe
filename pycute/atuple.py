@@ -5,25 +5,33 @@
 Arithmetic Tuples and related utilities.
 
 An :class:`ArithTuple` is an element of ``Z^S``: a hierarchical tuple 
-of ints under elementwise addition and scalar multiplication, with 
-implicit zero-extension along trailing positions.
+of stride scalars under elementwise addition and scalar multiplication, 
+with implicit zero-extension along trailing positions.
+
+A leaf is ordinarily an integer, hence ``Z^S``, but may be any 
+:class:`StrideScalar`, and every operation defers to the leaf's own 
+algebra. An :class:`F2` leaf therefore adds by XOR while its siblings 
+keep integer addition, which is what lets one coordinate axis carry a 
+swizzled offset while another stays an ordinary index.
 
 Representation
 ==============
 An :class:`ArithTuple` instance carries one field:
 
-    self.data : tuple[int | ArithTuple]
+    self.data : tuple[StrideScalar]
 
-Children are either a Python ``int`` or an :class:`ArithTuple`.
+A child is either a scalar leaf — a Python ``int``, any 
+:class:`Integer`, or a scalar of another algebra such as :class:`F2` — 
+or a nested :class:`ArithTuple`, which is itself a :class:`StrideScalar`.
 ``data`` is stored verbatim from the constructor arguments, so the same 
 algebraic element admits multiple equivalent representations — e.g. 
 ``ArithTuple(1, 0)``, ``ArithTuple((1,))``, and ``E(0)`` all denote 
 ``1*e_0 + 0*e_1 + ...`` and have ``data`` ``(1, 0)``, ``(1,)``, and 
 ``(1,)`` respectively.
 
-``int`` and :class:`ArithTuple` always have different depth: ``int 1``
+A scalar and an :class:`ArithTuple` always have different depth: ``int 1``
 is the depth-0 scalar, while ``ArithTuple((1,))`` is the depth-1 element
-with one explicit leaf. The single-int passthrough in :meth:`__new__`
+with one explicit leaf. The single-scalar passthrough in :meth:`__new__`
 means ``ArithTuple(1)`` returns the depth-0 ``int 1``; use
 ``ArithTuple((1,))``, ``ArithTuple(1, 0)``, or ``E(0)`` to construct a
 depth-1 element.
@@ -40,9 +48,9 @@ implicit zeros. Consequences:
 Construction
 ============
 :class:`ArithTuple(*args)` is the public, fully-validating constructor.
-Accepts ints, ArithTuples, tuples / lists, or varargs. Recursively lifts 
-nested tuples to :class:`ArithTuple` children. Single-int and single-
-:class:`ArithTuple` args pass through unchanged.
+Accepts stride scalars, ArithTuples, tuples / lists, or varargs. 
+Recursively lifts nested tuples to :class:`ArithTuple` children. 
+Single-scalar and single-:class:`ArithTuple` args pass through unchanged.
 
 Pretty printing is hybrid: a single nonzero leaf renders as
 ``value@p_n@...@p_0`` basis form, everything else as a Python tuple.
@@ -50,20 +58,21 @@ Pretty printing is hybrid: a single nonzero leaf renders as
 
 from itertools import zip_longest
 
-from .typedefs import is_int, is_static, Integer, StrideScalar
+from .typedefs import is_int, is_static, is_stride_scalar, Integer, StrideScalar
 from .htuple import is_tuple, get
 from .shape import idx2crd
 
 
 def _colex_lt(A, B):
-  """Strict colex order on ``int | ArithTuple``. Walks the dense view
-  from the highest position downward; raises on rank mismatch (a
-  nonzero int compared with an ArithTuple)."""
-  if is_int(A) and is_int(B):
+  """Strict colex order on ``StrideScalar | ArithTuple``. Walks the dense
+  view from the highest position downward, deferring to the leaf type's
+  own ordering; raises on rank mismatch (a nonzero leaf compared with an
+  ArithTuple)."""
+  if not isinstance(A, ArithTuple) and not isinstance(B, ArithTuple):
     return A < B
-  if is_int(A) and A != 0:
+  if not isinstance(A, ArithTuple) and A != 0:
     raise ValueError(f"colex_lt: rank-incompatible {A!r} < {B!r}")
-  if is_int(B) and B != 0:
+  if not isinstance(B, ArithTuple) and B != 0:
     raise ValueError(f"colex_lt: rank-incompatible {A!r} < {B!r}")
   A_data = A.data if isinstance(A, ArithTuple) else ()
   B_data = B.data if isinstance(B, ArithTuple) else ()
@@ -78,7 +87,7 @@ def _colex_lt(A, B):
 def _atuple_eq(A, B):
   """Equality under implicit zero-extension.
 
-  Each operand is an :class:`int` or an :class:`ArithTuple`. Trailing
+  Each operand is a scalar leaf or an :class:`ArithTuple`. Trailing
   positions extend by zero, so the unique additive identity ``int 0``
   is equal to an all-zero :class:`ArithTuple` of any rank, and two
   :class:`ArithTuple`s are equal whenever every (explicit or
@@ -97,10 +106,15 @@ def _atuple_eq(A, B):
 # =====================================================================
 
 class ArithTuple(StrideScalar):
-  """An element of the hierarchical integer-module ``Z^S``: a 
-  hierarchical tuple of ints under elementwise addition and 
-  scalar multiplication, with implicit zero-extension along 
-  trailing positions.
+  """An element of the hierarchical module ``Z^S``: a hierarchical 
+  tuple of stride scalars under elementwise addition and scalar 
+  multiplication, with implicit zero-extension along trailing 
+  positions.
+
+  A leaf is ordinarily an integer, hence ``Z^S``, but may be any 
+  :class:`StrideScalar`, and every operation defers to the leaf's own 
+  algebra -- so an :class:`F2` leaf adds by XOR while its siblings keep 
+  integer addition.
 
   Closed under elementwise addition and scalar multiplication::
 
@@ -109,7 +123,11 @@ class ArithTuple(StrideScalar):
       X * ArithTuple(A,B,ArithTuple(C,D))
         == ArithTuple(X*A,X*B,ArithTuple(X*C,X*D))
 
-  Adding a scalar to an ArithTuple is an incompatibility error.
+  Addition forms an abelian *group* -- ``int 0`` is the unique identity and every
+  element has a negation -- so ``-`` is defined elementwise as well. Unlike ``+``
+  it does not commute, so ``0 - x`` negates ``x``.
+
+  Adding or subtracting a nonzero scalar is an incompatibility error.
   """
   __slots__ = ("data",)
 
@@ -119,11 +137,11 @@ class ArithTuple(StrideScalar):
 
   def __new__(cls, *args):
     """Public, fully-validating constructor. Recursively lifts nested
-    raw tuples / lists to :class:`ArithTuple` children. Single-int and 
-    single-ArithTuple args pass through unchanged."""
+    raw tuples / lists to :class:`ArithTuple` children. Single-scalar
+    and single-ArithTuple args pass through unchanged."""
     if len(args) == 1:
       arg = args[0]
-      if isinstance(arg, ArithTuple) or is_int(arg):
+      if is_stride_scalar(arg):        # includes ArithTuple, int, Integer, F2
         return arg
       if not is_tuple(arg):
         raise TypeError(f"ArithTuple({arg!r})")
@@ -134,7 +152,7 @@ class ArithTuple(StrideScalar):
     # the lifted sequence verbatim.
     data = []
     for x in seq:
-      if isinstance(x, ArithTuple) or is_int(x):
+      if is_stride_scalar(x):          # Any stride scalar may be a leaf, not just int
         data.append(x)
       elif is_tuple(x):
         data.append(cls(x))
@@ -154,19 +172,37 @@ class ArithTuple(StrideScalar):
   # ------------------------------------------------------------------
 
   def __add__(self, other):
+    if not (is_stride_scalar(other) or is_tuple(other)):
+      return NotImplemented
     other = ArithTuple(other)          # lift / passthrough
-    if is_int(other):
+    if not isinstance(other, ArithTuple):
       if other == 0:
-        return self
+        return self                    # additive identity, of any leaf algebra
       raise TypeError(f"ArithTuple Incompatibility: {self} + {other}")
     return ArithTuple._set([a + b for a, b in zip_longest(self.data, other.data, fillvalue=0)])
 
   def __radd__(self, other):
     return self.__add__(other)         # commutative
 
+  def __sub__(self, other):
+    if not (is_stride_scalar(other) or is_tuple(other)):
+      return NotImplemented
+    other = ArithTuple(other)          # lift / passthrough
+    if not isinstance(other, ArithTuple):
+      if other == 0:
+        return self
+      raise TypeError(f"ArithTuple Incompatibility: {self} - {other}")
+    return ArithTuple._set([a - b for a, b in zip_longest(self.data, other.data, fillvalue=0)])
+
+  def __neg__(self):
+    return ArithTuple._set([-c for c in self.data])
+
+  def __rsub__(self, other):
+    return (-self) + other
+
   def __mul__(self, other):
-    if not is_int(other):
-      raise TypeError(f"{self} * {other!r}")
+    if isinstance(other, ArithTuple) or not is_stride_scalar(other):
+      return NotImplemented            # Scalars only, but of any leaf algebra
     return ArithTuple._set([c * other for c in self.data])
 
   def __rmul__(self, other):
@@ -176,7 +212,7 @@ class ArithTuple(StrideScalar):
     """``x @ i`` wraps ``x`` at outer index ``i`` 
     (i leading zeros, then ``x`` at position ``i``)."""
     if not is_int(other):
-      raise TypeError(f"{self} @ {other!r}")
+      return NotImplemented
     if other < 0:
       raise ValueError(f"{self} @ {other}: negative index")
     return ArithTuple._set((0,) * other + (self,))
@@ -278,7 +314,9 @@ class ArithTuple(StrideScalar):
 
 def ScaledBasis(value, seq=()):
   """A scaled basis vector at path ``seq``. Returns the canonical
-  ``int`` / :class:`ArithTuple` representation::
+  scalar / :class:`ArithTuple` representation, with ``value`` kept
+  verbatim at the leaf -- so ``ScaledBasis(F2(1), (0,))`` is an
+  ``F2``-valued axis::
 
       ScaledBasis(A,[])    := A
       ScaledBasis(A,[0])   := (A,0,0,...)
@@ -344,15 +382,16 @@ def basis_repr(x):
 
       x == sum(v * E(*s) for v, s in result)
 
-  Each entry corresponds to one nonzero leaf of ``x`` with its path.
-  When every leaf of ``x`` is zero (an ``int 0`` or an
+  Each entry corresponds to one nonzero leaf of ``x`` with its path, and
+  ``v`` is that leaf verbatim -- of whatever algebra it belongs to.
+  When every leaf of ``x`` is zero (a zero scalar such as ``int 0``, or an
   :class:`ArithTuple` whose every leaf is zero) the decomposition
   collapses to the single rank-zero term ``[(0, ())]``."""
   def walk(y, prefix):
     if isinstance(y, ArithTuple):
       for i, c in enumerate(y.data):
         yield from walk(c, prefix + (i,))
-    elif is_int(y) and y != 0:
+    elif is_stride_scalar(y) and y != 0:
       yield (y, prefix)
   result = list(walk(x, ()))
   return result if result else [(0, ())]
@@ -380,9 +419,10 @@ def proj(x, profile):
   """Extract from ``x`` the part at the position implied by ``profile``.
 
   ``profile`` must be a single scaled basis vector ``v * E(*s)`` — i.e.,
-  a stride leaf produced by ``leaves(layout.stride)``: a Python ``int``
-  (path ``()``, returns ``x`` unchanged), or an :class:`ArithTuple`
-  with exactly one nonzero leaf (uses that leaf's path)."""
+  a stride leaf produced by ``leaves(layout.stride)``: a scalar of any
+  algebra (path ``()``, returns ``x`` unchanged), or an
+  :class:`ArithTuple` with exactly one nonzero leaf (uses that leaf's
+  path)."""
   rep = basis_repr(profile)
   if len(rep) != 1:
     raise TypeError(f"proj: {profile!r} is not a basis element")
@@ -397,20 +437,24 @@ def unit(profile):
   same place -- which is how ``recast`` produces a stride of the same *type* as
   its input::
 
-      unit(5)        == 1                        # Z
-      unit(2 * E(1)) == E(1)                     # Z^S: axis kept
-      unit(F2(9))    == F2(1)                    # F2, via ``_unit``
+      unit(5)                       == 1                        # Z
+      unit(2 * E(1))                == E(1)                     # Z^S: axis kept
+      unit(F2(9))                   == F2(1)                    # F2, via ``_unit``
+      unit(ScaledBasis(F2(9), (0,))) == ScaledBasis(F2(1), (0,)) # an F2-valued axis
 
   A scalar type supplies ``_unit`` when its algebra's identity is not ``int 1``;
   ``F2`` does, since ``int 1`` would scale by ordinary multiplication rather than
-  carry-lessly. Otherwise ``profile`` must be a single scaled basis vector.
+  carry-lessly. The leaf's unit is placed back at ``profile``'s path, so an
+  :class:`ArithTuple` keeps both its axis and its leaf algebra. Otherwise
+  ``profile`` must be a single scaled basis vector.
   """
   if hasattr(profile, '_unit'):
     return profile._unit()
   rep = basis_repr(profile)
   if len(rep) != 1:
     raise TypeError(f"unit: {profile!r} is not a basis element")
-  return E(*rep[0][1])
+  value, seq = rep[0]
+  return ScaledBasis(value._unit() if hasattr(value, '_unit') else 1, seq)
 
 
 def as_tuple(obj):

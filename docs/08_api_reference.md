@@ -405,8 +405,12 @@ True
 distinct `data`, so a structural hash would violate
 `a == b => hash(a) == hash(b)`.
 
-Closed under `+` and scalar `*`. Test:
-[`test_atuple.py::TestArithTuple::test_atuple`](../test/test_atuple.py).
+Closed under `+`, `-`, and scalar `*`. Addition forms an abelian *group* —
+`int 0` is the unique identity and every element has a negation — so `-` is
+elementwise too; unlike `+` it does not commute, so `0 - x` negates `x`.
+Adding or subtracting a nonzero scalar is an incompatibility error. Tests:
+[`test_atuple.py::TestArithTuple::test_atuple`](../test/test_atuple.py),
+[`test_atuple_sub`](../test/test_atuple.py).
 
 ```python
 >>> ArithTuple(1, 2, 3) + (7, 8, 9)

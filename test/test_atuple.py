@@ -42,6 +42,32 @@ class TestArithTuple:
     with pytest.raises(TypeError):
       ArithTuple((1,2,3)) + 7   # Not iter
 
+  def test_atuple_sub(self):
+    """``Z^S`` is an abelian group under elementwise addition, so subtraction is
+    defined. Unlike ``+`` it does not commute, so ``0 - x`` negates ``x``."""
+    assert ArithTuple(1,2,3) - ArithTuple(7,8,9) == (-6,-6,-6)
+    assert ArithTuple(1,2,3) - (7,8,9) == (-6,-6,-6)
+    assert (7,8,9) - ArithTuple(1,2,3) == (6,6,6)
+    assert ArithTuple(1,2,(3,4)) - ArithTuple(7,8,(9,10)) == (-6,-6,(-6,-6))
+
+    assert 4*E(0) - E(0) == 3*E(0)
+    assert E(0) - E(0) == 0                  # the unique additive identity
+    assert E(0) - 0 == E(0)
+    assert 0 - E(0) == -1*E(0)               # ``__rsub__`` negates rather than delegating
+
+    with pytest.raises(TypeError):
+      ArithTuple(1,2,3) - 7                  # rank-incompatible, as for ``+``
+
+  def test_atuple_sub_of_different_axes_cannot_cancel(self):
+    """A cross-axis difference has two nonzero terms, so it is never its own
+    additive inverse. `right_inverse` relies on this to reject a mode belonging to
+    a different codomain axis without testing the axis explicitly."""
+    for a, b in [(4*E(0), E(1)), (E(1), E(0)), (E(0,1), E(1,0))]:
+      residue = a - b
+      assert residue != 0
+      assert residue + residue != 0          # only 0 is self-inverse in Z^S
+    assert (E(0) - E(0)) + (E(0) - E(0)) == 0
+
   def test_atuple_lt(self):
 
     shape_trg = (4,(5,6),2)
@@ -263,9 +289,12 @@ class TestIsBasis:
 
 class TestProjAndUnit:
   """``proj(x, profile)`` extracts the leaf of ``x`` at ``profile``'s
-  path; ``unit(profile)`` returns the unit basis element at that path.
-  Both require ``profile`` to be a single basis element and reject
-  multi-term sums."""
+  path; ``unit(profile)`` returns the multiplicative unit of
+  ``profile``'s algebra at that path, which for an ``int`` or an
+  ``ArithTuple`` is the unit basis element. Both require ``profile``
+  to be a single basis element and reject multi-term sums. A scalar
+  whose algebra has a different identity supplies a ``_unit`` hook
+  instead -- see ``test_swizzle.py`` for ``F2``."""
 
   def test_proj_extracts_leaf_at_basis_path(self):
     x = ArithTuple(7, (8, 9))
@@ -288,6 +317,78 @@ class TestProjAndUnit:
       proj(ArithTuple(7, 8), multi)
     with pytest.raises(TypeError):
       unit(multi)
+
+
+class TestArithTupleF2Leaves:
+  """A leaf may be any ``StrideScalar``, not only an ``int``, so one coordinate
+  axis can carry a swizzled (``F2``) offset while another stays an ordinary
+  index. Every operation defers to the leaf's own algebra."""
+
+  F0 = ScaledBasis(F2(1), (0,))           # F2-valued basis element at axis 0
+  F4 = ScaledBasis(F2(4), (0,))
+
+  def test_construction_accepts_f2_leaves(self):
+    assert ArithTuple(F2(1), 0) == self.F0
+    assert ArithTuple(F2(5)) == F2(5)      # a lone stride scalar passes through
+    assert ArithTuple(F2(1), 3) == (F2(1), 3)
+
+  def test_basis_repr_sees_an_f2_leaf(self):
+    """``basis_repr`` yields any stride-scalar leaf. Restricting it to ``is_int``
+    made an F2-valued axis collapse to the rank-zero zero term, so it silently
+    reported as ``0`` through ``__str__``, ``proj``, ``unit`` and ``is_basis``."""
+    assert basis_repr(self.F0) == [(F2(1), (0,))]
+    assert is_basis(self.F0)
+    assert str(self.F0) == "F1@0"
+    assert proj(self.F0, self.F0) == F2(1)
+
+  def test_unit_keeps_both_the_axis_and_the_leaf_algebra(self):
+    assert unit(self.F4) == self.F0
+    assert isinstance(proj(unit(self.F4), self.F0), F2)
+
+  def test_addition_is_xor_per_leaf(self):
+    assert self.F0 + self.F0 == 0                    # XOR is self-inverse
+    assert self.F4 + self.F0 == ScaledBasis(F2(5), (0,))
+    assert self.F0 + E(1) == (F2(1), 1)
+
+  def test_negation_and_subtraction_defer_to_the_leaf(self):
+    """``F2`` negation is identity, so ``-`` cannot be implemented as ``(-1) *``.
+    That form would also hang: ``F2`` scales by an operand's bits, and a negative
+    integer has no finite bit expansion."""
+    assert -self.F0 == self.F0
+    assert 0 - self.F0 == self.F0
+    assert self.F4 - self.F0 == ScaledBasis(F2(5), (0,))
+    assert self.F0 - self.F0 == 0
+
+  def test_ordering_defers_to_the_leaf(self):
+    assert self.F0 < self.F4
+    assert self.F4 > self.F0
+
+  def test_a_mixed_codomain_layout_evaluates(self):
+    """Axis 0 is a swizzled offset, axis 1 an ordinary index."""
+    A = Layout((8, 8), (self.F0, E(1)))
+    assert A(2, 3) == (F2(2), 3)
+    assert A(5, 7) == (F2(5), 7)
+
+  def test_reflected_operators_bridge_the_two_types(self):
+    """``F2`` yields ``NotImplemented`` for an operand it cannot handle, so Python
+    falls back on ``ArithTuple``'s reflected operator instead of raising. Without
+    that, an ``F2`` coordinate could not be scaled by an ``F2``-valued stride."""
+    assert F2(3) * self.F0 == ScaledBasis(F2(3), (0,))
+    assert self.F0 * F2(3) == ScaledBasis(F2(3), (0,))
+    assert F2(0) + self.F0 == self.F0        # 0 is every algebra's additive identity
+
+  def test_unknown_operands_still_raise(self):
+    """``NotImplemented`` is deferral, not silence: Python raises once neither side
+    knows what to do. A *nonzero scalar* is refused directly instead, since it is
+    an operand type both understand -- the mismatch is one of rank."""
+    with pytest.raises(TypeError):
+      self.F0 * 'x'
+    with pytest.raises(TypeError):
+      self.F0 + None
+    with pytest.raises(TypeError):
+      E(0) * E(1)                           # scalars only
+    with pytest.raises(TypeError):
+      self.F0 + 7                           # rank mismatch, not an unknown type
 
 
 class TestArithTupleSet:

@@ -8,6 +8,7 @@ These tests are also worked examples for docs/03_layout.md.
 """
 
 import logging
+import pytest
 import sympy
 
 from pycute import *
@@ -173,3 +174,13 @@ class TestCoshape:
   def test_coprofile_of_an_f2_layout_is_a_leaf(self):
     """An `F2` codomain is rank-1, like `Z`, so its profile is a leaf."""
     assert congruent(coprofile(Layout((8, 8), (F2(1), F2(9)))), 0)
+
+  def test_coprofile_does_not_need_the_extents(self):
+    """Taken from the strides rather than from `coshape`, `coprofile` needs no
+    extent arithmetic -- so it is defined for a codomain mixing a swizzled axis
+    with an ordinary index one, where `coshape` cannot yet compute a bound."""
+    L = Layout((8, 8), (ScaledBasis(F2(1), (0,)), E(1)))
+    assert congruent(coprofile(L), (0, 0))
+    assert make_basis_like(coprofile(L)) == (E(0), E(1))
+    with pytest.raises(TypeError):
+      coshape(L)

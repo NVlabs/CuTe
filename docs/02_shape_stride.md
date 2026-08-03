@@ -341,7 +341,8 @@ arithmetic tuple `(3, 5)`:
 True
 ```
 
-`ArithTuple` is closed under elementwise addition and scalar multiplication
+`ArithTuple` is closed under elementwise addition (and subtraction, since
+`Z^S` is a group) and scalar multiplication
 (but *not* element-by-element multiplication, because that is not how
 strides compose):
 
