@@ -27,6 +27,20 @@ class TestLeftInverse:
       assert L(inv_layout(L(i))) == L(i)
 
 
+  def test_left_inverse_f2(self):
+    """An `F2` stride whose chain gap is 1 leaves the walk in integer arithmetic,
+    so those cases work."""
+    self.postcondition_left_inverse(Layout(8,F2(1)))
+    self.postcondition_left_inverse(Layout((4,8),(F2(1),F2(4))))
+
+  def test_left_inverse_f2_non_unit_gap_raises(self):
+    """A gap between strides becomes an extent, and `F2`'s stride quotient is a
+    carry-less one -- not an `Integer`. Rather than return a layout whose shape
+    holds an `F2`, `left_inverse` rejects it."""
+    for L in [Layout(8,F2(2)), Layout((8,8),(F2(1),F2(9))), Layout((4,4),(F2(1),F2(5)))]:
+      with pytest.raises(ValueError):
+        left_inverse(L)
+
   def test_left_inverse(self):
     self.postcondition_left_inverse(Layout(1,0))
     self.postcondition_left_inverse(Layout(1,1))

@@ -101,13 +101,27 @@ def right_inverse(A):
   `A`'s codomain is the integers this is the canonical right inverse, with
   `A(R(k)) == k` over the contiguous portion of the image.
 
+  Each codomain axis is inverted by following its chain of strides in increasing
+  order. Over `Z` and `Z^S` a mode continues the chain only if its stride is
+  exactly the running extent `d_{k-1} * s_{k-1}`: a smaller stride overlaps
+  ground already covered and a larger one leaves holes.
+
+  Over `F2` a stride may additionally carry any component the covered modes
+  already span, since XOR-ing those bits permutes them rather than colliding, so
+  swizzles invert too -- `Layout((8, 8), (F2(1), F2(9)))` is its own right
+  inverse. The carried component must stay inside the covered range across the
+  mode's whole extent; where it does not, the chain stops there, and the result
+  is still a valid right inverse, just not the largest one.
+
   Post-conditions:
     result(A(result(i))) == result(i)  for i in range(size(result))
 
   Examples:
-    right_inverse(Layout((4, 8), (1, 4))) == Layout(32, 1)
-    right_inverse(Layout((4, 8), (8, 1))) == Layout((8, 4), (4, 1))
-    right_inverse(Layout((4, 8), (1, 5))) == Layout(4, 1)
+    right_inverse(Layout((4, 8), (1, 4)))         == Layout(32, 1)
+    right_inverse(Layout((4, 8), (8, 1)))         == Layout((8, 4), (4, 1))
+    right_inverse(Layout((4, 8), (1, 5)))         == Layout(4, 1)
+    right_inverse(Layout((8, 8), (F2(1), F2(9)))) == Layout((8, 8), (F2(1), F2(9)))
+    right_inverse(Layout((8, 8), (F2(9), F2(1)))) == Layout((8, 8), (F2(8), F2(9)))
   """
   if hasattr(A, '_right_inverse'):
     return A._right_inverse()
@@ -134,6 +148,11 @@ def left_inverse(A):
     This is sufficient but not necessary for injectivity, so a ValueError is
     raised both for non-injective A (overlapping strides) and for the injective
     layouts whose strides cannot be chained (e.g. coprime strides).
+
+    A gap between strides becomes an extent of the result, so the codomain's
+    stride quotients must be Integers. `F2`'s quotient is a carry-less one, so an
+    `F2`-strided A is supported only where every gap is 1; otherwise a ValueError
+    is raised rather than returning a layout whose shape holds an `F2`.
 
   Post-conditions:
     A(result(A(i))) == A(i)  for i in range(size(A))

@@ -246,34 +246,47 @@ class Layout(LayoutBase):
   def _right_inverse(self) -> Layout:
     """
     Largest right inverse of this Layout.
-    """
-    coprof   = coprofile(self)
-    result_S = unflatten(iter(lambda: [ ], -1), coprof)  # Avoid aliasing [] from repeat_like
-    result_D = unflatten(iter(lambda: [ ], -1), coprof)
-    curr_D   = unflatten(iter(lambda: [1], -1), coprof)
 
+    Each codomain axis is inverted independently by walking its modes in
+    increasing stride order.
+    """
     flat_s, flat_d = _coalesce_z(self.shape, self.stride)
+
     # The chain is followed in stride order. Only static (concrete) strides
     # can be ordered, so a symbolic stride is filtered past the sort.
     def _stride_key(dsp):
       return (0, dsp[0]) if is_static(dsp[0]) else (1, 0)
+      
+    chain = sorted(zip(flat_d, flat_s, prefix_product(flat_s)), key=_stride_key)
 
-    for de, s, pps in sorted(zip(flat_d, flat_s, prefix_product(flat_s)), key=_stride_key):
-      d = proj(de, de)
-      result_s = proj(result_S, de)
-      result_d = proj(result_D, de)
-      curr_d   = proj(curr_D,   de)
+    def invert_axis(e):
+      """Invert the single codomain axis `e` by following its chain of strides."""
+      curr_d = next((unit(de) for de in flat_d if de != 0 and unit(de) == e), e)
+      one    = proj(curr_d, curr_d)         # `1` or `F2(1)`
+      result_s, result_d = [], []
 
-      if d == 0 or s == 1:
-        continue
-      if d != curr_d[0]:
-        continue
+      for de, s, pps in chain:
+        if de == 0 or s == 1:               # Carries no positional information
+          continue
 
-      result_s.append(s)
-      result_d.append(pps)
-      curr_d[0] = s * d
+        # Back-substitution can undo a residue that cancels itself, so this tests
+        # whether the residue is its own additive inverse -- XOR is,
+        # integer addition is not.
+        residue = curr_d - de
+        if residue + residue != 0 or (s - 1) * residue >= curr_d:
+          continue                          # Off-chain: the image stops being contiguous
 
-    return Layout._set(tuple(result_S), tuple(result_D))._coalesce(coprof)
+        stride = pps * one                  # This chain stride's domain index,
+        if residue != 0:                    # corrected for the part already covered
+          stride += inner_product(idx2crd(residue, result_s), result_d)
+
+        result_s.append(s)
+        result_d.append(stride)
+        curr_d = s * curr_d
+
+      return Layout._set(tuple(result_s), tuple(result_d))._coalesce()
+
+    return transform_apply_leaf(make_layout, invert_axis, make_basis_like(coprofile(self)))
 
   def _left_inverse(self) -> Layout:
     """
@@ -304,7 +317,13 @@ class Layout(LayoutBase):
       result_s.append(s)                    # Record this mode (a later mode overwrites s with its own gap)
       result_d.append(pps)
 
-    return Layout._set(tuple(result_S), tuple(result_D))._coalesce_z(coprof)
+    result = Layout._set(tuple(result_S), tuple(result_D))._coalesce_z(coprof)
+    # A gap between strides becomes an extent, so a codomain whose stride
+    # quotients are not Integers cannot be chained this way. F2's quotient is a
+    # carry-less one, which lands an F2 in the shape.
+    if not all(is_int(s) for s in leaves(shape(result))):
+      raise ValueError(f"left_inverse({self}): non-integer extent in {shape(result)}")
+    return result
 
   def _complement(self, extend: Shape | None = None) -> Layout:
     """
