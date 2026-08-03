@@ -390,11 +390,26 @@ def proj(x, profile):
 
 
 def unit(profile):
-  """The unit basis element at ``profile``'s path if ``profile`` is 
-  a single scaled basis vector;"""
+  """The multiplicative unit of ``profile``'s algebra, at ``profile``'s basis path.
+
+  Drops a stride scalar's magnitude while keeping the algebra and the axis it
+  lives on, so that ``unit(d) * n`` rebuilds a stride of magnitude ``n`` in the
+  same place -- which is how ``recast`` produces a stride of the same *type* as
+  its input::
+
+      unit(5)        == 1                        # Z
+      unit(2 * E(1)) == E(1)                     # Z^S: axis kept
+      unit(F2(9))    == F2(1)                    # F2, via ``_unit``
+
+  A scalar type supplies ``_unit`` when its algebra's identity is not ``int 1``;
+  ``F2`` does, since ``int 1`` would scale by ordinary multiplication rather than
+  carry-lessly. Otherwise ``profile`` must be a single scaled basis vector.
+  """
+  if hasattr(profile, '_unit'):
+    return profile._unit()
   rep = basis_repr(profile)
   if len(rep) != 1:
-    raise TypeError(f"proj: {profile!r} is not a basis element")
+    raise TypeError(f"unit: {profile!r} is not a basis element")
   return E(*rep[0][1])
 
 

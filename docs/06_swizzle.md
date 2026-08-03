@@ -28,18 +28,28 @@ Binary Swizzle)* example.)
 ## `F2` strides
 
 The [`F2(value)`](../pycute/swizzle.py) class wraps a Python integer
-in a stride scalar where `+` is `^` (XOR) and `*` is regular integer
-multiplication.
+in a stride scalar where `+` is `^` (XOR) and `*` is a *carry-less*
+product. An `F2` value's bits are the coefficients of a polynomial over
+the two-element field, so `*` is polynomial multiplication and an integer
+operand acts through its **bits**, not its value — the scalar ring is
+$GF(2)[x]$, not $\mathbb{Z}$.
 
 ```python
 >>> from pycute import *
 >>> F2(0b1010) + F2(0b1100)
 F6                              # 0b0110 = 6
 >>> F2(0b1010) * 2
-F20                             # 0b10100 = 20
+F20                             # 0b10100 = 20; a power of two is a plain shift
 >>> 3 * F2(0b1010)
-F30
+F30                             # 0b1010 ^ 0b10100
+>>> F2(0b11) * 0b11
+F5                              # 0b101 carry-lessly, where 3 * 3 == 9 in Z
 ```
+
+The carry-less product agrees with the integer product exactly where the
+schoolbook multiplication carries nowhere — always the case when either
+operand is a power of two, which is why the usual swizzle constants behave
+like ordinary scaling and why the difference is easy to miss.
 
 Because addition is XOR, every `F2` value is its own additive inverse:
 `F2(a) + F2(a) == F2(0)`. This is the property that makes layouts with
@@ -64,10 +74,38 @@ the result is the XOR of the products `c_i * d_i` rather than their sum.
 
 (See [`test_swizzle.py::TestF2Layout`](../test/test_swizzle.py).)
 
-> **Note.** PyCuTe's `F2` stores arbitrary integers; the "field $F_2$"
-> aspect is not enforced — `F2(7) + F2(7) == F2(0)` because `7 ^ 7 == 0`
-> and that is intentional, but `F2(3) * F2(5)` is *not* defined (only
-> integer scaling is). This matches the *(Whitepaper, §2.3.1)* definition.
+> **Note.** PyCuTe's `F2` stores an arbitrary integer, so a value is really
+> an element of $F_2^m = (\mathbb{Z}_{2^m}, \mathrm{XOR}, \cdot)$ — a vector
+> of bits — rather than of the two-element field itself. `F2(7) + F2(7) ==
+> F2(0)` because `7 ^ 7 == 0`. `F2 * F2` *is* defined, and is the same
+> carry-less product as `F2 * int`: `F2(3) * F2(5) == F2(15)`. See
+> *(Whitepaper, §2.3.1 and §2.4.4)*.
+
+## `F2` values as coordinates
+
+Composing an `F2` layout with itself — or with its inverse — means evaluating
+a layout *at* an `F2` value. `F2` supplies `divmod`, so
+[`idx2crd`](../pycute/shape.py) can decompose such a value into the natural
+coordinates of a shape and feed it back in:
+
+```python
+>>> idx2crd(F2(0b10110), (4, 8))
+(F2, F5)                         # 0b10 and 0b101: disjoint bit-fields
+>>> L = Layout((8, 8), (F2(1), F2(9)))
+>>> all(L(L(i)) == i for i in range(64))
+True                             # this swizzle is an involution
+```
+
+Because `divmod` is carry-less, a power-of-two extent splits an `F2` value
+into exactly the bit-fields of that mode. The decomposition and `crd2idx`'s
+recomposition are mutually inverse only where the shape's colexicographical
+prefix products agree in $\mathbb{Z}$ and in $F_2$; a shape whose extents
+carry — `(3, 3, 3)` is the smallest — raises `ValueError` rather than
+returning a coordinate that will not recompose.
+
+(See [`test_swizzle.py::TestF2Divmod`](../test/test_swizzle.py),
+[`TestF2Idx2Crd`](../test/test_swizzle.py), and
+[`TestF2LayoutOnF2Coordinates`](../test/test_swizzle.py).)
 
 ## The `Swizzle` functor
 

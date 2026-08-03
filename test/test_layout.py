@@ -143,9 +143,33 @@ class TestCoshape:
     assert coshape(Layout((4, 8), (E(0), E(1)))) == (4, 8)
     assert coshape(Layout((4, 8), (E(1), E(0)))) == (8, 4)
 
+  def test_coshape_f2_stride_is_a_power_of_two(self):
+    """An `F2` codomain is a space of bit-vectors, not an interval, so its bound
+    is the smallest power of two spanning the modes' bit-fields. XOR is not
+    monotone, so summing the modes' maxima would under-count."""
+    assert coshape(Layout((8, 8), (F2(1), F2(9)))) == 64
+    assert coshape(Layout((8, 8), (F2(9), F2(1)))) == 64
+    assert coshape(Layout((4, 8), (F2(1), F2(4)))) == 32
+    assert coshape(Layout((4, 4), (F2(1), F2(1)))) == 4     # non-injective
+    assert coshape(Layout(8, F2(0))) == 1                   # broadcast
+    assert coshape(Layout(4, F2(3))) == 8                   # image reaches 6
+
+  def test_coshape_bounds_the_image(self):
+    """The defining property, for every codomain: `coshape` holds every offset."""
+    for L in [Layout((4, 8), (1, 4)), Layout((4, 8), (8, 1)), Layout(8, 0),
+              Layout((8, 8), (F2(1), F2(9))), Layout((8, 8), (F2(9), F2(1))),
+              Layout((4, 4), (F2(1), F2(5))), Layout(4, F2(3)),
+              Layout((4, 8), (F2(1), 0))]:
+      assert int(coshape(L)) > max(int(L(i)) for i in range(size(L)))
+
   def test_coprofile_is_congruent_to_coshape(self):
     """`coprofile` fixes only the codomain's tuple/leaf structure, so its leaf
     *values* are not the extents -- it is congruent to `coshape`, not equal."""
     for L in [Layout((4, 8), (1, 4)), Layout(8, 0),
-              Layout((4, 8), (E(0), E(1))), Layout((4, 5), (E(1), E(4, 1)))]:
+              Layout((4, 8), (E(0), E(1))), Layout((4, 5), (E(1), E(4, 1))),
+              Layout((8, 8), (F2(1), F2(9)))]:
       assert congruent(coprofile(L), coshape(L))
+
+  def test_coprofile_of_an_f2_layout_is_a_leaf(self):
+    """An `F2` codomain is rank-1, like `Z`, so its profile is a leaf."""
+    assert congruent(coprofile(Layout((8, 8), (F2(1), F2(9)))), 0)

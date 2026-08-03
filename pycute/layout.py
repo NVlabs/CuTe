@@ -73,9 +73,20 @@ class Layout(LayoutBase):
 
   def _coshape(self) -> Shape:
     """
-    Shape of the layout's codomain
+    Shape of the layout's codomain: an extent large enough to hold every value
+    the layout produces.
+
+    Each mode contributes its maximal offset `(s-1) * d`. Where the codomain's
+    addition is monotone -- `Z` and `Z^S` -- those contributions add and the
+    extent is one past their total. A codomain whose addition is not monotone
+    cannot be bounded that way and supplies its own `_coshape_bound` instead;
+    `F2`, whose `+` is XOR, is the case in point.
     """
-    result = inner_product(transform_leaf(lambda s: s-1, self.shape), self.stride)
+    max_o = transform_leaf(lambda s,d: (s-1) * d, self.shape, self.stride)
+    for o in leaves(max_o):
+      if hasattr(o, '_coshape_bound'):     # Codomain with a non-monotone +
+        return o._coshape_bound(max_o)
+    result = sum(leaves(max_o))
     return as_tuple(result + repeat_like(1, shape(result)))
 
   def _coprofile(self) -> Profile:

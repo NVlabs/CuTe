@@ -509,11 +509,18 @@ Tests: [`test_atuple.py::TestProjAndUnit`](../test/test_atuple.py).
 
 ### `unit(profile)`
 
-The unit basis element at `profile`'s path: `E()` (which collapses to
-`int 1`) when `profile` is an integer, `E(*seq)` when `profile` is a
-single basis element with path `seq`. Multi-term sums raise
-`TypeError`. Used by `recast` to produce a stride of the same *type*
-as the input.
+The multiplicative unit of `profile`'s algebra, at `profile`'s basis path:
+`E()` (which collapses to `int 1`) when `profile` is an integer, `E(*seq)`
+when `profile` is a single basis element with path `seq`, and `F2(1)` for an
+`F2`. Multi-term sums raise `TypeError`.
+
+Dropping the magnitude while keeping the algebra and axis is what lets
+`unit(d) * n` rebuild a stride of magnitude `n` in the same place, as `recast`
+does to produce a stride of the same *type* as its input. A scalar type
+supplies a `_unit` hook when its identity is not an `int` / `ArithTuple` basis
+element; `F2` does, since scaling `int 1` would stay in `Z` and multiply with
+carries. Tests: [`test_atuple.py::TestProjAndUnit`](../test/test_atuple.py),
+[`test_swizzle.py::TestF2`](../test/test_swizzle.py).
 
 ### `as_tuple(obj)`
 
@@ -796,15 +803,33 @@ Tests: [`test/test_swizzle.py`](../test/test_swizzle.py)
 
 ### `class F2(value)`
 
-Stride scalar where `+` is `^` (XOR) and `*` is integer scaling. Used
-for binary-field strides.
+Stride scalar for binary-field strides: an element of
+$F_2^m = (\mathbb{Z}_{2^m}, \mathrm{XOR}, \cdot)$, whose bits are the
+coefficients of a polynomial over the two-element field. `+` is `^` (XOR)
+and `*` is the *carry-less* (polynomial) product, in both its `F2 * F2` and
+`F2 * int` forms — an integer operand acts through its bits, not its value.
+The two products coincide wherever the schoolbook multiplication carries
+nowhere, as it does for a power-of-two operand.
 
 ```python
 >>> F2(0b1010) + F2(0b1100)
 F6
 >>> 3 * F2(0b1010)
 F30
+>>> F2(0b11) * 0b11
+F5                       # 0b101 carry-lessly, where 3 * 3 == 9 in Z
 ```
+
+`divmod(F2(a), b)` is Euclidean division in $GF(2)[x]$: the unique `(q, r)`
+with `a == q * b + r` and `deg(r) < deg(b)`, both in `F2`. For a
+power-of-two `b` it is exactly the bit split
+`(F2(a >> k), F2(a & (2**k - 1)))`. This is what lets
+[`idx2crd`](#idx2crdidx-shape) decompose an `F2` codomain value into the
+natural coordinates of a shape, via `F2`'s `_idx2crd` hook; a shape whose
+colexicographical prefix products disagree in $\mathbb{Z}$ and $F_2$ raises
+`ValueError`. Tests:
+[`test_swizzle.py::TestF2Divmod`](../test/test_swizzle.py),
+[`TestF2Idx2Crd`](../test/test_swizzle.py).
 
 ### `class Swizzle(bits, base, shift)`
 
@@ -1044,7 +1069,7 @@ is the authoritative source. Each PyCuTe test defines a
 | [`test_inverse_left.py`](../test/test_inverse_left.py) | `left_inverse` post-condition + cotiling application |
 | [`test_nullspace.py`](../test/test_nullspace.py) | `nullspace` post-condition |
 | [`test_recast.py`](../test/test_recast.py) | `recast` for integer and `Fraction` scales, scalar/vector/matrix/nested layouts |
-| [`test_swizzle.py`](../test/test_swizzle.py) | `F2` arithmetic (XOR-as-addition, scalar multiplication, self-inverse), `Swizzle` (XOR pattern, involution, constructor validation), F2-stride layouts |
+| [`test_swizzle.py`](../test/test_swizzle.py) | `F2` arithmetic (XOR-as-addition, carry-less multiplication, self-inverse), `F2` Euclidean division and the `idx2crd` decomposition of an `F2` value, `Swizzle` (XOR pattern, involution, constructor validation), F2-stride layouts evaluated at integer and `F2` coordinates |
 | [`test_tensor.py`](../test/test_tensor.py) | `Tensor` construction, three-coordinate-form indexing, `__getitem__`/`__setitem__`, slicing returning sub-tensors, tensor algebra pass-through, `Accessor`, `make_tensor`, `identity_tensor` (predication) |
 
 Run them all with:

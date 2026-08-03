@@ -190,6 +190,10 @@ def idx2crd(idx: Coord, shape: Shape) -> Coord:
   The final mode keeps the full quotient (its `mod` is skipped), so an 
   out-of-bounds `idx` does not wrap -- the excess accumulates in the last leaf.
 
+  A scalar `idx` may also be a non-`Integer` stride scalar that supplies an
+  `_idx2crd` hook -- `ArithTuple` and `F2` both do -- which is what lets a value
+  drawn from a layout's codomain be fed back in as a coordinate.
+
   Pre-conditions:
   -- weakly_congruent(idx, shape)
 
@@ -205,6 +209,7 @@ def idx2crd(idx: Coord, shape: Shape) -> Coord:
     idx2crd(7,    ((3, 2), 4)) == ((1, 0), 1)
     idx2crd(42,   (3, 7, 2))   == (0, 0, 2)      # out of bounds: last leaf absorbs excess
     idx2crd(None, (3, (2, 4))) == (0, (0, 0))
+    idx2crd(F2(0b10110), (4, 8)) == (F2(0b10), F2(0b101))    # carry-less bit split
   """
   if idx is None:                        # 0s like shape
     return repeat_like(0, shape)

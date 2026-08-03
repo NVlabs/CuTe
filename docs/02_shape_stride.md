@@ -449,17 +449,25 @@ Convenience functions defined in [`atuple.py`](../pycute/atuple.py):
 [`test_swizzle.py::TestF2Layout`](../test/test_swizzle.py) for
 checked F2 arithmetic and worked F2-layout examples.)
 
-PyCuTe's [`F2`](../pycute/swizzle.py) class wraps an integer and
-overloads `+` to be `^` (bitwise XOR) and `*` to remain integer
-multiplication:
+PyCuTe's [`F2`](../pycute/swizzle.py) class wraps an integer, so a value
+is an element of $F_2^m = (\mathbb{Z}_{2^m}, \mathrm{XOR}, \cdot)$ — a
+vector of bits — rather than of the two-element field itself. `+` is `^`
+(bitwise XOR) and `*` is a *carry-less* product: the bits are polynomial
+coefficients, so an integer operand acts through its bits, not its value.
 
 ```python
 >>> from pycute import *
 >>> F2(0b1010) + F2(0b1100)
 F6                       # 0b0110
 >>> F2(0b1010) * 2
-F20
+F20                      # a power of two is a plain shift
+>>> F2(0b11) * 0b11
+F5                       # 0b101 carry-lessly, where 3 * 3 == 9 in Z
 ```
+
+The two products coincide whenever the schoolbook multiplication carries
+nowhere, which is why the difference only shows up for strides and extents
+that are not powers of two.
 
 `F2` strides describe XOR-based swizzles directly inside a regular
 `Layout` — no special wrapper is needed. See [Swizzling](./06_swizzle.md)
