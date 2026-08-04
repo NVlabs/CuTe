@@ -51,60 +51,83 @@ class TestGreatestCommonDomain:
 
   #########################################################
 
-  def test_singleton(self):
-    # The empty / singleton case
-    assert self.postcondition_greatest_common_domain(1, 1) == Layout((1,), (0,))
-
-  def test_int_vs_int(self):
-    # Same int -- full common domain
-    R = self.postcondition_greatest_common_domain(10, 10)
-    assert size(R) == 10
-
-    # Coprime ints -- size 1
-    R = self.postcondition_greatest_common_domain(7, 9)
-    assert size(R) == 1
-
-    # Shared prime factors
-    R = self.postcondition_greatest_common_domain(12, 18)
-    assert size(R) == 6
-
-  def test_int_vs_tuple_coerces_via_shape(self):
-    # `10` and `(10,)` have the same shape via flatten(shape(...))
-    R1 = greatest_common_domain(10, 10)
-    R2 = greatest_common_domain((10,), (10,))
-    assert R1 == R2
-
   def test_known_expected_results(self):
     # Hand-checked expected results for canonical examples
     expected = [
-      ((1,        1),               Layout((1,), (0,))),
-      ((10,       10),              Layout((10,),    (1,))),
-      (((16, 3),  (16, 3)),         Layout((16, 3),  (1, 16))),
-      (((5, 2),   10),              Layout((5, 2),   (1, 5))),
-      (((5, 3, 4), (10, 6)),        Layout((5, 2),   (1, 30))),
-      (((5, 3, 3, 4), (10, 6, 3)),  Layout((5,),     (1,))),
-      (((1, 5, 3, 3, 4), (10, 6, 3)), Layout((5,),   (1,))),
-      (((5, 3, 3, 4), (10, 6, 1, 3)), Layout((5,),   (1,))),
-      (((2, 21),  (3, 14)),         Layout((7,),     (6,))),
-      (((6, 35),  (15, 14)),        Layout((3, 7),   (1, 30))),
-      (((16, 64), (4, 16, 16)),     Layout((4, 4, 4, 16), (1, 4, 16, 64))),
-      (((5, 3),   (3, 5)),          Layout((1,), (0,))),
-      (((5, 5, 3), (5, 3, 5)),      Layout((5,),     (1,))),
-      (((7, 2, 3, 2, 2, 3),     (504,)),
-                                    Layout((7, 2, 3, 2, 2, 3), (1, 7, 14, 42, 84, 168))),
-      (((7, 2, 3, 2, 2, 3, 2),  (7, 3, 2, 2, 3, 2, 2)),
-                                    Layout((7, 2, 2), (1, 42, 504))),
-      (((7, 2, 2, 2, 2, 3, 5),  (7, 3, 2, 2, 2, 2, 5)),
-                                    Layout((7, 5),    (1, 336))),
+      # Int vs Ints
+      (1,                     1,                     Layout((1,),               (0,))),
+      (10,                    10,                    Layout((10,),              (1,))),
+      ((10,),                 (10,),                 Layout((10,),              (1,))),
+      (7,                     9,                     Layout((1,),               (0,))),
+      (12,                    18,                    Layout((6,),               (1,))),
+
+      # Canonical examples
+      ((16, 3),               (16, 3),               Layout((16, 3),            (1, 16))),
+      ((5, 2),                10,                    Layout((5, 2),             (1, 5))),
+      ((5, 3, 4),             (10, 6),               Layout((5, 2),             (1, 30))),
+      ((4, 3, 5),             (6, 10),               Layout((2, 5),             (1, 12))),
+      ((5, 6, 3),             (6, 15),               Layout((3,),               (30,))),
+      ((5, 3, 3, 4),          (10, 6, 3),            Layout((5,),               (1,))),
+      ((1, 5, 3, 3, 4),       (10, 6, 3),            Layout((5,),               (1,))),
+      ((5, 3, 3, 4),          (10, 6, 1, 3),         Layout((5,),               (1,))),
+      ((2, 21),               (3, 14),               Layout((7,),               (6,))),
+      ((6, 35),               (15, 14),              Layout((3, 7),             (1, 30))),
+      ((16, 64),              (4, 16, 16),           Layout((4, 4, 4, 16),      (1, 4, 16, 64))),
+      ((5, 3),                (3, 5),                Layout((1,),               (0,))),
+      ((5, 5, 3),             (5, 3, 5),             Layout((5,),               (1,))),
+      ((7, 2, 3, 2, 2, 3),    (504,),                Layout((7, 2, 3, 2, 2, 3), (1, 7, 14, 42, 84, 168))),
+      ((7, 2, 3, 2, 2, 3, 2), (7, 3, 2, 2, 3, 2, 2), Layout((7, 2, 2),          (1, 42, 504))),
+      ((7, 2, 2, 2, 2, 3, 5), (7, 3, 2, 2, 2, 2, 5), Layout((7, 5),             (1, 336))),
+
+      # Unequal sizes -- the domain divides both shapes but fills neither
+      ((4, 3),                (6, 12, 10),           Layout((2,),               (1,))),
+      ((16, 12),              (6, 3, 3),             Layout((2,),               (1,))),
+      ((12, 10),              (7, 12),               Layout((1,),               (0,))),
+      ((10, 8),               (8, 5, 4),             Layout((2, 2),             (1, 40))),
+      ((3, 5, 4),             (5, 12, 5),            Layout((4,),               (15,))),
+      ((3, 5, 8),             (6, 5, 2, 10),         Layout((3, 2, 2),          (1, 30, 60))),
+      ((8, 12),               (6, 8, 6, 8),          Layout((2, 2, 2),          (1, 24, 48))),
+      ((12, 12, 5),           (9, 12, 16, 16),       Layout((3,),               (1,))),
+      ((8, 6, 4, 2),          (12, 6, 12, 3),        Layout((4,),               (1,))),
+      ((9, 6, 6, 9),          (6, 6, 9, 2),          Layout((3, 3),             (1, 108))),
+      ((6, 9, 4, 6),          (12, 9, 4, 6),         Layout((6, 2, 2, 3),       (1, 108, 216, 432))),
+
+      # Each factor must sit at an offset that is a mode boundary of *both*
+      # shapes. A mode spanning two modes of a shape divides only the layouts
+      # that happen to be compact across them, so it is not a common domain.
+      ((9, 6),                (6, 6, 8),             Layout((3,),               (1,))),
+      ((8, 6, 5),             (3, 8),                Layout((1,),               (0,))),
+      ((3, 10),               (2, 6, 5, 6),          Layout((1,),               (0,))),
+      ((2, 6, 9),             (3, 6, 3),             Layout((1,),               (0,))),
+      ((5, 10, 12),           (2, 30, 2, 5),         Layout((1,),               (0,))),
+      ((8, 3, 2, 6),          (6, 12, 2),            Layout((2,),               (1,))),
+      ((8, 9, 6, 12),         (6, 6, 2),             Layout((2,),               (1,))),
+      ((12, 10, 6, 10),       (9, 10, 12),           Layout((3,),               (1,))),
+      ((2, 10, 10),           (25, 4, 2),            Layout((2,),               (100,))),
+      ((14, 6, 3),            (6, 42),               Layout((2, 2, 3),          (1, 42, 84))),
+
+      # Taking the whole shared factor where the leaves first meet can cost a
+      # larger factor further along, so a smaller one at a later offset wins
+      ((3, 12),               (2, 12),               Layout((2,),               (6,))),
+      ((4, 10),               (5, 2, 4),             Layout((2,),               (20,))),
+      ((4, 18),               (9, 2, 4),             Layout((2,),               (36,))),
+      ((12, 4),               (8, 12),               Layout((4, 2),             (1, 24))),
+      ((6, 2, 6, 2),          (4, 12),               Layout((2, 2),             (1, 12))),
+      ((6, 2, 8),             (2, 2, 12),            Layout((2, 4),             (1, 12))),
+      ((7, 2, 25, 2),         (10, 70),              Layout((5, 2),             (70, 350))),
+
+      # Equal sizes, unrelated factorizations
+      ((7, 35, 10),           (5, 14, 35),           Layout((5,),               (490,))),
+      ((6, 42, 9),            (9, 2, 3, 42),         Layout((3, 3),             (1, 756))),
+      ((2, 14, 3, 3),         (42, 6),               Layout((2, 7, 3),          (1, 2, 84))),
+      ((2, 6, 3, 2, 6),       (18, 6, 2, 2),         Layout((2, 3, 2),          (1, 2, 216))),
+      ((12, 2, 42),           (3, 28, 3, 2, 2),      Layout((3, 4, 2),          (1, 3, 504))),
+      ((15, 14, 6),           (10, 3, 42),           Layout((5, 7, 6),          (1, 30, 210))),
+      ((3, 4, 30),            (2, 30, 2, 3),         Layout((2, 5, 2, 3),       (6, 12, 60, 120))),
     ]
-    for (A, B), expected_R in expected:
+    for A, B, expected_R in expected:
       R = self.postcondition_greatest_common_domain(A, B)
       assert R == expected_R, f"gcd({A}, {B}) = {R}  expected {expected_R}"
-
-  def test_coprime_leaves_yield_singleton(self):
-    # Order-aligned but pairwise coprime leaves yield the trivial singleton
-    assert self.postcondition_greatest_common_domain((5, 3), (3, 5)) == Layout((1,), (0,))
-    assert self.postcondition_greatest_common_domain((7, 11), (11, 7)) == Layout((1,), (0,))
 
   def test_singleton_leaves_are_skipped(self):
     # Leading / interior `1`s in either shape are transparent to the walk

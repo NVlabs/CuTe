@@ -142,7 +142,7 @@ def left_inverse(A):
   original coordinate.
 
   Pre-conditions:
-    A's nonzero strides form an ordered chain: sorting the modes by stride as 
+    A's nonzero strides form an ordered chain: sorting the modes by stride as
     d_0 < d_1 < ... with sizes s_0, s_1, ..., each stride divides the
     next (d_{k-1} | d_k) and satisfies (d_k >= d_{k-1} * s_{k-1}).
     This is sufficient but not necessary for injectivity, so a ValueError is
@@ -411,7 +411,7 @@ def layout_add(A: Layout, B: Layout) -> Layout:
       f"greatest_common_domain({A_co}, {B_co}) = {G} (size {size(G)})"
     )
 
-  # G has shape S = (s_0, s_1, ...) and stride D = (d_0, d_1, ...). 
+  # G has shape S = (s_0, s_1, ...) and stride D = (d_0, d_1, ...).
   # Every i in [0, size(A)) decomposes uniquely as
   #     i = sum_k c_k * d_k    with  c_k in [0, s_k)
   # via G. Because size(G) == size(A) and G's leaves align with the coalesced
@@ -432,7 +432,7 @@ def greatest_common_domain(A, B) -> Layout:
        and `shape(B)` share *in order*, and
     -- stride records the offset at which each common factor appears.
 
-  Depends only on `shape(A)` and `shape(B)`. Inputs may be ints, tuples, 
+  Depends only on `shape(A)` and `shape(B)`. Inputs may be ints, tuples,
   `Layout`s, or `Tensor`s (anything with `shape(...)`).
 
   When the leaves of `A` and `B` are pairwise coprime in their walk order
@@ -444,7 +444,7 @@ def greatest_common_domain(A, B) -> Layout:
     depth(result) == 1
     size(result) divides math.gcd(size(A), size(B))
     composition(A, result) and composition(B, result) are always admissible
-    greatest_common_domain(logical_divide(shape(A), result)[1], 
+    greatest_common_domain(logical_divide(shape(A), result)[1],
                            logical_divide(shape(B), result)[1]) == Layout((1,), (0,))
 
   Examples:
@@ -460,31 +460,31 @@ def greatest_common_domain(A, B) -> Layout:
   result_s = []
   result_d = []
 
-  pA = pB = 1                        # Running prefix products
-  i = j = 0
+  pA = pB = 1                              # Running prefix products
+  i  = j  = 0
   while i < len(A) and j < len(B):
-    if A[i] == 1: i += 1; continue   # Skip size-1 leaves
+    if A[i] == 1: i += 1; continue         # Skip size-1 leaves
     if B[j] == 1: j += 1; continue
 
-    gcd_ab = math.gcd(A[i], B[j])
-    if gcd_ab == 1:                  # Coprime leaves: nothing to do
-      pA *= A[i]; i += 1;
-      pB *= B[j]; j += 1;
-      continue
+    lcm_pab = math.lcm(pA, pB)             # Smallest offset aligned in both
+    rA, rB = lcm_pab // pA, lcm_pab // pB  # Residue
 
-    # Largest factor of (pA * A[i]) and (pB * B[j]) that contains the shared
-    # `gcd_ab`. We can only commit this factor when it is consistent with both
-    # running prefix products.
-    gcd_pab = math.gcd(pA * A[i], pB * B[j])
-    if (gcd_pab % pA == 0) and (gcd_pab % pB == 0):
-      result_s.append(gcd_ab)
-      result_d.append(gcd_pab // gcd_ab)
+    if A[i] % rA == 0 and B[j] % rB == 0:
+      gcd_rab = math.gcd(A[i] // rA, B[j] // rB)
+      if gcd_rab != 1:
+        result_s.append(gcd_rab)
+        result_d.append(lcm_pab)
+        A[i] //= rA * gcd_rab
+        B[j] //= rB * gcd_rab
+        pA = pB = lcm_pab * gcd_rab
+        continue
 
-    pA    *= gcd_ab
-    pB    *= gcd_ab
-    A[i] //= gcd_ab
-    B[j] //= gcd_ab
+    # Advance the leaf that ends first, both when neither end divides the other
+    eA, eB = pA * A[i], pB * B[j]          # Ends of the leaves
+    qA, qB = eB % eA == 0, eA % eB == 0
+    if qA or not qB: pA = eA; i += 1
+    if qB or not qA: pB = eB; j += 1
 
   if len(result_s) == 0:
-    return Layout((1,), (0,))
-  return Layout(tuple(result_s), tuple(result_d))
+    return Layout._set((1,), (0,))
+  return Layout._set(tuple(result_s), tuple(result_d))
