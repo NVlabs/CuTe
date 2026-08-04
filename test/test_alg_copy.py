@@ -39,7 +39,7 @@ class _LoggingPtr(MutableAccessor):
 
 
 def _vector_slices(src_layout, dst_layout) -> tuple[Layout, Layout]:
-  """The (src, dst) layouts of the innermost run `copy` hands to `_array_copy`."""
+  """The (src, dst) layouts of the innermost run `copy` hands to `_memcpy`."""
   src, dst = make_tensor(src_layout), make_tensor(dst_layout)
   common = greatest_common_domain(src, dst)
   src_c, dst_c = logical_divide(src, common), logical_divide(dst, common)
@@ -50,15 +50,15 @@ def _vector_slices(src_layout, dst_layout) -> tuple[Layout, Layout]:
 
   # Align both to destination-memory order, then take the common contiguous run
   inv_dst = right_inverse(dst_n.layout[0])
-  src_a = logical_divide(src_n, (inv_dst, None))
-  dst_a = logical_divide(dst_n, (inv_dst, None))
+  src_v = logical_divide(src_n, (inv_dst, None))
+  dst_v = logical_divide(dst_n, (inv_dst, None))
 
-  run = coalesce(logical_divide(src_n.layout[0], inv_dst)[0])[0]
+  run = coalesce(src_v.layout[0][0])[0]
   vec = size(run) if stride(run) == 1 else 1
 
-  src_v = logical_divide(src_a, (vec, None))
-  dst_v = logical_divide(dst_a, (vec, None))
-  return src_v[(None, 0), 0].layout, dst_v[(None, 0), 0].layout
+  src_v = logical_divide(src_v, vec)
+  dst_v = logical_divide(dst_v, vec)
+  return src_v[:, 0].layout, dst_v[:, 0].layout
 
 
 def _writes(copy_fn, src_layout, dst_layout) -> tuple[list, list]:
@@ -190,7 +190,7 @@ class TestCopyOpt(unittest.TestCase):
     self.assertEqual(dst[0], 3.0)
 
   def test_vector_is_contiguous_in_both_or_scalar(self):
-    """The innermost run handed to `_array_copy` is `V:1` in *both* tensors, so
+    """The innermost run handed to `_memcpy` is `V:1` in *both* tensors, so
     the array copy only has to check alignment and hardware support. When no
     common contiguous run exists, `V` is 1 and the dispatch is scalar."""
     for label, src_layout, dst_layout, expect in [

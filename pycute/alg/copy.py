@@ -69,19 +69,18 @@ def copy(src: Tensor, dst: Tensor) -> None:
   # This section is technically instruction-aware,
   # we are looking for a common contiguous run (vector) in src and dst
   # but other instructions may look for other patterns completely
-  src_dst_v = coalesce(logical_divide(src_n.layout[0], inv_dst)[0])[0]
   try:
     vec_size = 1
+    src_dst_v = coalesce(src_v.layout[0][0])[0]
     if stride(src_dst_v) == 1:
       vec_size = size(src_dst_v)
   except TypeError:
     pass
 
-  src_v = logical_divide(src_v, (vec_size, None))  # ((V, Rest), Incompat)
-  dst_v = logical_divide(dst_v, (vec_size, None))  # ((V, Rest), Incompat)
+  src_v = logical_divide(src_v, vec_size)  # (V, Rest)
+  dst_v = logical_divide(dst_v, vec_size)  # (V, Rest)
 
-  # Slice and dispatch to an optimized/vectorized array_copy
+  # Slice and dispatch to an optimized/vectorized memcpy
 
-  for j in range(size[1](dst_v)):
-    for i in range(size[0][1](dst_v)):
-      _memcpy(src_v[(None,i),j], dst_v[(None,i),j])
+  for i in range(size[1](dst_v)):
+    _memcpy(src_v[:,i], dst_v[:,i])
