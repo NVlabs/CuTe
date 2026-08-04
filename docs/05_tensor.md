@@ -28,7 +28,7 @@ Two roles, two abstract base classes:
   `__getitem__` (dereference).
 * **`MutableAccessor`** — read/write random access. Adds `__setitem__`.
 
-PyCuTe ships three concrete accessors out of the box:
+PyCuTe ships four concrete accessors out of the box:
 
 ### `Ptr(source, dtype=None, owner=None)`
 
@@ -122,6 +122,27 @@ the offset itself. This is what gets used when you call
 `ImplicitAccessor` is what lets the same `print_tensor` rendering code
 display either real tensor values *or* the offsets of a layout (which is
 how the C++ `print_layout` function is implemented).
+
+### `TransformAccessor(accessor, transform)`
+
+A read-only wrapper that applies a callable `transform` on every
+dereference: `TransformAccessor(e, f)[i] = f(e[i])`. Offsetting
+propagates to the inner accessor and leaves `transform` alone, so a
+chain of offsets never re-binds the transform:
+
+```python
+>>> a = Array(4, dtype=ctypes.c_int)
+>>> for i in range(4): a[i] = i
+>>> t = TransformAccessor(a, lambda x: x * x)
+>>> t[3]
+9
+>>> (t + 2)[1]            # same as t[3]
+9
+```
+
+Use this when the layout should see ordinary offsets but the values
+need a post-read conversion — scaling, casting, packing — without
+mutating the underlying storage.
 
 ## Tensors
 
@@ -320,7 +341,8 @@ logic. Keeping them separate has several benefits:
 
 * **Replaceable accessors**. The same `Tensor` API works on a real
   `Array`, a `Ptr` into storage owned by NumPy or a foreign allocator, an
-  `ImplicitAccessor` for offset/coordinate inspection, or a custom
+  `ImplicitAccessor` for offset/coordinate inspection, a
+  `TransformAccessor` for a post-read conversion, or a custom
   user-defined accessor.
 * **Sliceable everywhere**. `Layout._offset_and_slice` is the single
   function that powers `Tensor.__getitem__`, `Tensor.__setitem__`, and

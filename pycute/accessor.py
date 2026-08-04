@@ -160,3 +160,22 @@ class ImplicitAccessor(Accessor):
   def __repr__(self):
     return f"{{{self.base}}}"
 
+
+class TransformAccessor(Accessor):
+  def __init__(self, accessor, transform):
+    self.accessor = accessor
+    self.transform = transform
+
+  def __add__(self, offset):
+    return TransformAccessor(self.accessor + offset, self.transform)
+
+  def __getitem__(self, offset):
+    return self.transform(self.accessor[offset])
+
+  def __eq__(self, other):
+    if not isinstance(other, TransformAccessor):
+      return NotImplemented
+    return self.accessor == other.accessor and self.transform == other.transform
+
+  def __repr__(self):
+    return f"TransformAccessor({self.accessor}, {self.transform})"

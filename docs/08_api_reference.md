@@ -25,7 +25,7 @@ The reference is organized by module:
   `nullspace`, `layout_add`, `greatest_common_domain`
 * [`swizzle`](#module-swizzle) — `Swizzle`, `F2`, `shiftr`, `shiftl`
 * [`accessor`](#module-accessor) — `Accessor`, `MutableAccessor`,
-  `Ptr`, `Array`, `ImplicitAccessor`
+  `Ptr`, `Array`, `ImplicitAccessor`, `TransformAccessor`
 * [`tensor`](#module-tensor) — `Tensor`, `is_tensor`, `make_tensor`,
   `identity_tensor`
 * [`util.print_tensor`](#module-utilprint_tensor) — `print_tensor`
@@ -897,6 +897,20 @@ Heap-allocated contiguous storage: a `Ptr` that owns its allocation.
 
 A "no-op" accessor: dereferencing returns `base + offset` rather than
 loading from memory. Used by `print_tensor` and `identity_tensor`.
+
+### `class TransformAccessor(accessor, transform)`
+
+Wraps an accessor and applies a callable `transform` on every
+dereference: `TransformAccessor(e, f)[i] = f(e[i])`. Offsetting
+propagates to the inner accessor, leaving `transform` unchanged.
+
+```python
+>>> a = Array(4, dtype=ctypes.c_int)
+>>> for i in range(4): a[i] = i
+>>> t = TransformAccessor(a, lambda x: x * x)
+>>> t[3]
+9
+```
 
 ---
 
