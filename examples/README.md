@@ -50,6 +50,26 @@ The companion `einsum_test.py` uses a dependency-free brute-force oracle:
 pytest examples/einsum_test.py
 ```
 
+## `algorithms/copy.ipynb`
+
+Walkthrough of the COPY algorithm (Whitepaper §2.6.1): applications that are
+all `copy(src, dst)` with different layouts (memcpy, gather/scatter, broadcast,
+transpose, …), then the layout analysis `pycute.alg.copy` uses to reshape that
+loop — common domain, nullspace, and alignment — against the element-at-a-time
+`pycute.alg.ref.copy`.
+
+```sh
+pip install -e ".[viz]"   # optional inline SVG layout figures
+jupyter notebook examples/algorithms/copy.ipynb
+```
+
+Unlike the scripts above, the notebook does not need to run from the repository
+root: when `pycute` is not importable it walks up from the kernel's working
+directory to the checkout and puts that on `sys.path`, so a bare
+`jupyter notebook` works without installing anything.
+
+Unit coverage for both loops lives in `test/test_alg_copy.py`.
+
 ## Adding an example
 
 Keep each example self-contained, import from `pycute` (and `pycute.util` for
