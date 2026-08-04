@@ -92,6 +92,11 @@ def identity_tensor(shape: Shape) -> Tensor:
 
 
 def make_tensor(layout: Layout | Shape, dtype=ctypes.c_double) -> Tensor:
+  """
+  Allocate an `Array` of size `coshape(layout)` and bind it to `layout`.
+
+  To bind a layout to data you already have, wrap it in a `Ptr` instead.
+  """
   if not is_layout(layout):
     if not is_tuple(layout) and not is_int(layout):
       raise ValueError(f"make_tensor({dtype}, {layout}): Invalid layout {layout}")

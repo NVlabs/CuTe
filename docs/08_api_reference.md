@@ -25,7 +25,7 @@ The reference is organized by module:
   `nullspace`, `layout_add`, `greatest_common_domain`
 * [`swizzle`](#module-swizzle) — `Swizzle`, `F2`, `shiftr`, `shiftl`
 * [`accessor`](#module-accessor) — `Accessor`, `MutableAccessor`,
-  `Array`, `ArrayView`, `ImplicitAccessor`
+  `Ptr`, `Array`, `ImplicitAccessor`
 * [`tensor`](#module-tensor) — `Tensor`, `is_tensor`, `make_tensor`,
   `identity_tensor`
 * [`util.print_tensor`](#module-utilprint_tensor) — `print_tensor`
@@ -864,20 +864,34 @@ ABC for read-only random-access pointers. Defines `__add__` and
 
 ABC for read/write random-access pointers. Adds `__setitem__`.
 
+### `class Ptr(source, dtype=None, owner=None)`
+
+A typed pointer into memory owned elsewhere — the general-purpose accessor.
+`source` is an integer address (then `dtype` is required) or an object that
+can provide one (`array.array`, `numpy.ndarray`, a ctypes array,
+`bytearray`, …), in which case `dtype` and the storage `owner` are inferred.
+Offsetting yields another `Ptr` anchored to the same owner. `MutableAccessor`.
+
+```python
+>>> import array, ctypes
+>>> data = array.array('d', [1.0, 2.0, 3.0, 4.0])
+>>> T = Tensor(Ptr(data), Layout((2, 2), (2, 1)))   # dtype inferred
+>>> T[1, 0] = 9.0
+>>> data[2]
+9.0
+>>> Ptr(data.buffer_info()[0], ctypes.c_double)[0]  # raw address
+1.0
+```
+
 ### `class Array(size, dtype=ctypes.c_double)`
 
-Heap-allocated contiguous storage. `MutableAccessor`.
+Heap-allocated contiguous storage: a `Ptr` that owns its allocation.
 
 ```python
 >>> a = Array(16, dtype=ctypes.c_int)
 >>> a[5] = 42; a[5]
 42
 ```
-
-### `class ArrayView(base, offset=0)`
-
-A typed pointer at a byte offset inside an `Array`. Returned by
-`Array.__add__`. `MutableAccessor`.
 
 ### `class ImplicitAccessor(base)`
 
@@ -911,7 +925,8 @@ True iff `isinstance(x, Tensor)`.
 
 ### `make_tensor(layout, dtype=ctypes.c_double)`
 
-Allocate an `Array` of size `coshape(layout)` and bind it to `layout`.
+Allocate an `Array` of size `coshape(layout)` and bind it to `layout`. To bind
+a layout to existing data, pass a `Ptr` to `Tensor` directly.
 
 ### `identity_tensor(shape)`
 

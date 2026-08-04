@@ -30,11 +30,61 @@ Two roles, two abstract base classes:
 
 PyCuTe ships three concrete accessors out of the box:
 
+### `Ptr(source, dtype=None, owner=None)`
+
+A typed pointer into memory owned by someone else — the general-purpose
+accessor, and the base class of `Array`. Element `i` lives at
+`address + i * sizeof(dtype)`; nothing is allocated, copied, or bounds-checked.
+
+`source` is either an integer address, in which case `dtype` is required, or an
+object that can provide one — `array.array`, `numpy.ndarray`, a ctypes array,
+`bytearray` — in which case both the `dtype` and the storage `owner` are
+inferred from it:
+
+```python
+>>> import array, ctypes
+>>> from pycute import *
+>>> data = array.array('d', [1.0, 2.0, 3.0, 4.0])
+>>> T = Tensor(Ptr(data), Layout((2, 2), (2, 1)))
+>>> T[1, 0] = 9.0
+>>> data
+array('d', [1.0, 2.0, 9.0, 4.0])
+```
+
+The raw-address form is what you reach for when the address comes from
+somewhere PyCuTe knows nothing about (a foreign allocator, a device pointer, a
+`ctypes` FFI call):
+
+```python
+>>> Ptr(data.buffer_info()[0], ctypes.c_double)[0]
+1.0
+```
+
+Prefer passing the object: the reference kept in `owner` (surfaced as `base`)
+stops the storage from being collected while the pointer is still in use. Note
+that a `Ptr` only ever supplies the *base address* — striding is the
+`Layout`'s job, so a non-contiguous NumPy view is described by giving its
+strides to the layout rather than to the accessor.
+
+Offsetting a `Ptr` yields another `Ptr` at the deeper address, anchored to the
+same owner, so a chain of offsets never accumulates wrappers:
+
+```python
+>>> p = Ptr(data)
+>>> (p + 1) + 2 == p + 3
+True
+>>> ((p + 1) + 2).base is data
+True
+```
+
+(See [`test_tensor.py::TestAccessor`](../test/test_tensor.py).)
+
 ### `Array(size, dtype=ctypes.c_double)`
 
-A heap-allocated, read/write contiguous array of `size` elements of `dtype`.
-This is the production accessor for any code that needs a real backing
-buffer.
+A heap-allocated, read/write contiguous array of `size` elements of `dtype`:
+a `Ptr` that owns its allocation. This is the production accessor for any
+code that needs a fresh backing buffer — to bind a layout to data you already
+have, wrap it in a `Ptr` instead.
 
 ```python
 >>> from pycute import *
@@ -43,24 +93,17 @@ buffer.
 >>> a[5] = 42
 >>> a[5]
 42
->>> a + 5             # ArrayView at offset 5
-<...ArrayView...>
+>>> a + 5             # Ptr at offset 5
+Ptr(0x..., c_int)
 ```
 
 `Array` keeps the underlying `ctypes` storage alive (it stores a reference
-in `self._raw_storage`), so it is safe to slice and re-offset without
+in `self._raw_storage`), and every offset taken from it keeps a reference back
+to the `Array` through `owner`, so it is safe to slice and re-offset without
 worrying about garbage collection. Source:
 [`accessor.py`](../pycute/accessor.py).
 
 (See [`test_tensor.py::TestAccessor`](../test/test_tensor.py).)
-
-### `ArrayView(base, offset)`
-
-A "fat pointer" into an existing `Array` (or another `ArrayView`).
-`ArrayView` uses `ctypes.cast` to compute a typed pointer at a byte offset
-inside `base.ptr`. Adding to an `ArrayView` produces another `ArrayView`
-at a deeper offset. PyCuTe creates these implicitly via `Array.__add__`
-and `Tensor.__getitem__`.
 
 ### `ImplicitAccessor(base)`
 
@@ -126,7 +169,7 @@ specify a position, you get back a **sub-tensor** rather than a value:
 
 ```python
 >>> T[1, None]               # row 1 as a 1-D tensor
-Tensor(<...ArrayView at offset 4...>, Layout(4, 1))
+Tensor(<...Ptr at offset 4...>, Layout(4, 1))
 >>> T[None, 2][1]            # column 2, then row 1
 8.5
 ```
@@ -276,7 +319,7 @@ all the indexing logic and the accessor encodes all the memory-management
 logic. Keeping them separate has several benefits:
 
 * **Replaceable accessors**. The same `Tensor` API works on a real
-  `Array`, an `ArrayView` into someone else's storage, an
+  `Array`, a `Ptr` into storage owned by NumPy or a foreign allocator, an
   `ImplicitAccessor` for offset/coordinate inspection, or a custom
   user-defined accessor.
 * **Sliceable everywhere**. `Layout._offset_and_slice` is the single

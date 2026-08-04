@@ -7,6 +7,7 @@ Unit tests for pycute.tensor and pycute.accessor
 These tests are also worked examples for docs/05_tensor.md.
 """
 
+import array
 import ctypes
 import logging
 import pytest
@@ -136,8 +137,8 @@ class TestAccessor:
       a[i] = i * i
     assert [a[i] for i in range(8)] == [0, 1, 4, 9, 16, 25, 36, 49]
 
-  def test_array_view_offset(self):
-    """Adding to an `Array` produces an `ArrayView` at that offset."""
+  def test_array_offset_writes_through(self):
+    """Adding to an `Array` produces a `Ptr` into the same storage."""
     a = Array(8, dtype=ctypes.c_int)
     for i in range(8):
       a[i] = i
@@ -148,8 +149,8 @@ class TestAccessor:
     v[1] = 99
     assert a[4] == 99        # write through to the original array
 
-  def test_array_view_repr_shows_underlying_address(self):
-    """`repr(view)` is stable across re-slicing because it shows the C pointer,
+  def test_offset_repr_shows_underlying_address(self):
+    """`repr` is stable across re-slicing because it shows the C pointer,
     not the Python `id()` of the wrapper."""
     a = Array(8, dtype=ctypes.c_int)
     assert repr(a + 3) == repr(a + 3)
@@ -158,14 +159,14 @@ class TestAccessor:
     expected_addr = ctypes.addressof(a.ptr.contents) + 3 * ctypes.sizeof(ctypes.c_int)
     assert f"{expected_addr:#018x}" in repr(a + 3)
 
-  def test_array_view_value_equality(self):
-    """Two views into the same memory with the same dtype compare equal"""
+  def test_offset_value_equality(self):
+    """Two pointers into the same memory with the same dtype compare equal"""
     a = Array(8, dtype=ctypes.c_int)
 
     assert a + 3 == a + 3
     assert a + 3 != a + 4
 
-    # Array <-> ArrayView at the same address with the same dtype are equal
+    # An Array and a Ptr at the same address with the same dtype are equal
     assert a == a + 0
 
     # Different dtypes at the same address are not equal
@@ -176,8 +177,8 @@ class TestAccessor:
     assert a != 0
     assert a + 1 != "anything"
 
-  def test_array_view_canonicalizes_to_owning_array(self):
-    """Nested ArrayViews flatten: `view.base` is always the owning `Array`."""
+  def test_offsets_canonicalize_to_owning_array(self):
+    """Chained offsets flatten: `.base` is always the owning `Array`."""
     a = Array(8, dtype=ctypes.c_int)
     v1 = a + 3
     v2 = v1 + 2
@@ -187,6 +188,75 @@ class TestAccessor:
     # ...and the absolute pointer is the sum of offsets, not chained casting.
     expected_addr = ctypes.addressof(a.ptr.contents) + 5 * ctypes.sizeof(ctypes.c_int)
     assert ctypes.addressof(v2.ptr.contents) == expected_addr
+
+  def test_pointer_wraps_foreign_storage(self):
+    """`Ptr` reads and writes storage owned by someone else."""
+    data = array.array('u', 'abcd')
+    T = Tensor(Ptr(data.buffer_info()[0], ctypes.c_wchar), Layout(4))
+    assert [T[i] for i in range(4)] == list('abcd')
+
+    T[2] = 'Z'
+    assert data.tounicode() == 'abZd'   # the write landed in the array.array
+
+  def test_pointer_infers_dtype_and_owner(self):
+    """Given the object rather than an address, dtype and owner are inferred."""
+    data = array.array('d', [1.0, 2.0, 3.0, 4.0])
+    p = Ptr(data)
+    assert p.dtype is ctypes.c_double
+    assert p.owner is data              # keeps the storage alive
+    assert p.base is data
+
+    T = Tensor(p, Layout((2, 2), (2, 1)))
+    T[1, 0] = 9.0
+    assert data[2] == 9.0
+
+    # A bare address carries no type information, so dtype is required
+    with pytest.raises(ValueError):
+      Ptr(data.buffer_info()[0])
+
+    # ...and an object with no addressable storage is rejected outright
+    with pytest.raises(TypeError):
+      Ptr('abcd')
+
+  def test_pointer_offset_and_equality(self):
+    """Offsetting a `Ptr` steps by `sizeof(dtype)` and preserves the owner."""
+    data = array.array('i', [0, 1, 2, 3, 4, 5])
+    p = Ptr(data)
+
+    q = p + 3
+    assert q[0] == 3
+    assert q.address == p.address + 3 * ctypes.sizeof(ctypes.c_int)
+    assert q.owner is data
+    assert (q + 1)[0] == 4
+
+    assert p + 3 == q                   # same dtype at the same address
+    assert p + 2 != q
+    assert p != 0                       # comparison with a non-accessor is False
+    assert f"{q.address:#018x}" in repr(q)
+
+  def test_array_is_a_pointer_to_its_own_storage(self):
+    """`Array` owns its allocation; offsetting it yields a plain `Ptr` into it."""
+    a = Array(8, dtype=ctypes.c_int)
+    assert isinstance(a, Ptr)
+    assert isinstance(a + 1, Ptr)
+    assert a.base is a
+    assert (a + 1).base is a
+
+  def test_pointer_over_numpy_array(self):
+    """A `Ptr` can view NumPy storage; the layout supplies the strides."""
+    np = pytest.importorskip("numpy")
+    a = np.arange(12, dtype=np.int32).reshape(3, 4)
+
+    T = Tensor(Ptr(a), Layout((3, 4), (4, 1)))
+    assert T.accessor.dtype is ctypes.c_int32
+    assert [T[i, j] for i in range(3) for j in range(4)] == list(range(12))
+
+    T[2, 3] = 99
+    assert a[2, 3] == 99
+
+    # Every-other-column view: same base address, striding lives in the layout
+    V = Tensor(Ptr(a[:, ::2]), Layout((3, 2), (4, 2)))
+    assert [V[i, j] for i in range(3) for j in range(2)] == [0, 2, 4, 6, 8, 10]
 
   def test_implicit_accessor_passes_offset_through(self):
     """`ImplicitAccessor` returns its offset rather than dereferencing."""
