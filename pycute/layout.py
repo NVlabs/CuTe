@@ -362,14 +362,15 @@ class Layout(LayoutBase):
         if shapeC is None:
           return Layout._set(shapeA, strideA)
         # The last extent of complement is always 1, so update it to extend
-        last_strideC = back(strideC)
+        last_strideC = wrap(strideC)[-1]
         sizeC = proj(last_strideC, last_strideC)
         #sizeR = (size(shapeA) + sizeC - 1) // sizeC
         shapeR = list(leaves(shapeA))
         for i, s in enumerate(shapeR):
           shapeR[i] = (s + sizeC - 1) // sizeC
           sizeC     = (s + sizeC - 1) // s
-        return Layout(replace_back(shapeC, shapeR), strideC)._coalesce()
+        shapeC = wrap(shapeC)[:-1] + (shapeR,)
+        return Layout(shapeC, strideC)._coalesce()
       # Extend the result
       result = transform_apply_leaf(make_layout, extend_complement,
                                     coprof, result.shape, result.stride,

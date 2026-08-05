@@ -34,20 +34,6 @@ class TestHTuple:
     assert unwrap((((42,)),)) == 42
     assert unwrap((1, 2)) == (1, 2)     # not a 1-tuple
 
-  def test_front_back(self):
-    """`front`/`back` return first/last element of a tuple, or `x` itself."""
-    assert front((1, 2, 3)) == 1
-    assert back((1, 2, 3)) == 3
-    assert front(7) == 7
-    assert back(7) == 7
-
-  def test_replace_front_back(self):
-    assert replace_front((1, 2, 3), 9) == (9, 2, 3)
-    assert replace_back((1, 2, 3), 9) == (1, 2, 9)
-    # Non-tuple input: replace returns the new value
-    assert replace_front(0, 9) == 9
-    assert replace_back(0, 9) == 9
-
   def test_product(self):
     assert product(2) == 2
     assert product((3,2)) == 6

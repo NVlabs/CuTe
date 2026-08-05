@@ -179,15 +179,13 @@ C++ CuTe equivalent: `cute::take<Begin, End>(A)`. Use
 
 (See [`test_htuple.py::TestSelectTake`](../test/test_htuple.py).)
 
-### `wrap` / `unwrap` / `front` / `back`
+### `wrap` / `unwrap`
 
 Small helpers used pervasively in the implementation:
 
 * `wrap(x)` — make a 1-tuple if `x` is not a tuple already; otherwise return
   `x` unchanged.
 * `unwrap(x)` — repeatedly strip 1-tuples (`((((42,))))` → `42`).
-* `front(x)` / `back(x)` — first / last element if `x` is a tuple, else `x`
-  itself. There are also `replace_front` / `replace_back` mutators.
 
 ## Traversal: `leaves`, `flatten`, `unflatten`, `transform_leaf`
 

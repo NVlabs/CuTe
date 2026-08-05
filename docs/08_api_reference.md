@@ -69,16 +69,6 @@ Wrap a non-tuple in a 1-tuple; recursively unwrap 1-tuples.
 ((7,), (7,), 42)
 ```
 
-### `front(x)` / `back(x)` / `replace_front(obj, value)` / `replace_back(obj, value)`
-
-First / last element if `x` is a tuple; mutators that replace the first /
-last element.
-
-```python
->>> front((1, 2, 3)), back((1, 2, 3)), replace_front((1, 2, 3), 9), replace_back((1, 2, 3), 9)
-(1, 3, (9, 2, 3), (1, 2, 9))
-```
-
 ### `get(obj, mode=())`
 
 Index by path (the path must be a tuple). Subscript form
@@ -1083,7 +1073,7 @@ is the authoritative source. Each PyCuTe test defines a
 
 | Test | What it checks |
 |---|---|
-| [`test_htuple.py`](../test/test_htuple.py) | `is_tuple`/`wrap`/`unwrap`/`front`/`back`, `product`, `product_each`, `inner_product`, `prefix_product`, `idx2crd`/`crd2idx` round-trip, `slice_`/`dice_`, `get`/`lift` round-trip, `select`/`take`, `transform_leaf`, `flatten`/`unflatten`/`repeat_like`, mode-indexed `shape`/`size`/`rank`/`depth` |
+| [`test_htuple.py`](../test/test_htuple.py) | `is_tuple`/`wrap`/`unwrap`, `product`, `product_each`, `inner_product`, `prefix_product`, `idx2crd`/`crd2idx` round-trip, `slice_`/`dice_`, `get`/`lift` round-trip, `select`/`take`, `transform_leaf`, `flatten`/`unflatten`/`repeat_like`, mode-indexed `shape`/`size`/`rank`/`depth` |
 | [`test_atuple.py`](../test/test_atuple.py) | `ArithTuple` arithmetic, `ScaledBasis` semantics, colex ordering, coordinate-strided layouts |
 | [`test_typing.py`](../test/test_typing.py) | `Integer` / `is_int`, `sympy` symbol compatibility, layout algebra with symbolic shapes |
 | [`test_layout_add.py`](../test/test_layout_add.py) | `layout_add` post-conditions |

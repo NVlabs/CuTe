@@ -81,32 +81,6 @@ def unwrap(x: HTuple) -> HTuple:
   return x
 
 
-def front(obj: HTuple) -> HTuple:
-  return obj[0] if is_tuple(obj) else obj
-
-
-def replace_front(obj: HTuple, value) -> HTuple:
-  if isinstance(obj, tuple):
-    return (value,) + obj[1:]
-  if isinstance(obj, list):
-    obj[0] = value
-    return obj
-  return value
-
-
-def back(obj: HTuple) -> HTuple:
-  return obj[-1] if is_tuple(obj) else obj
-
-
-def replace_back(obj: HTuple, value) -> HTuple:
-  if isinstance(obj, tuple):
-    return obj[:-1] + (value,)
-  if isinstance(obj, list):
-    obj[-1] = value
-    return obj
-  return value
-
-
 def ModeOpDecorator(func):
   class ModeOp:
     """
