@@ -48,8 +48,8 @@ def copy(src: Tensor, dst: Tensor) -> None:
   # Account for nullspaces of dst and src within compatible portions
 
   null_dst = nullspace(dst_c.layout[0])
-  src_n = logical_divide(src_c, (null_dst, None))  # ((Null, NonNull), InCompat)
-  dst_n = logical_divide(dst_c, (null_dst, None))  # ((Null, NonNull), InCompat)
+  src_n = logical_divide[0](src_c, null_dst)  # ((Null, NonNull), InCompat)
+  dst_n = logical_divide[0](dst_c, null_dst)  # ((Null, NonNull), InCompat)
 
   if dst_n.layout[0][0](size(null_dst) - 1) != 0:
     raise ValueError(f"Sanity: nullspace definition error")
@@ -63,8 +63,8 @@ def copy(src: Tensor, dst: Tensor) -> None:
   # Vectorization of the compatible portions
 
   inv_dst = right_inverse(dst_n.layout[0])
-  src_v = logical_divide(src_n, (inv_dst, None))  # ((Id, NonId), Incompat)
-  dst_v = logical_divide(dst_n, (inv_dst, None))  # ((Id, NonId), Incompat)
+  src_v = logical_divide[0](src_n, inv_dst)   # ((Id, NonId), Incompat)
+  dst_v = logical_divide[0](dst_n, inv_dst)   # ((Id, NonId), Incompat)
 
   # This section is technically instruction-aware,
   # we are looking for a common contiguous run (vector) in src and dst
@@ -77,8 +77,8 @@ def copy(src: Tensor, dst: Tensor) -> None:
   except TypeError:
     pass
 
-  src_v = logical_divide(src_v, vec_size)  # (V, Rest)
-  dst_v = logical_divide(dst_v, vec_size)  # (V, Rest)
+  src_v = logical_divide(src_v, vec_size)     # (V:1, Rest)
+  dst_v = logical_divide(dst_v, vec_size)     # (V:1, Rest)
 
   # Slice and dispatch to an optimized/vectorized memcpy
 

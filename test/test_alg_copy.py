@@ -3,11 +3,16 @@
 
 """Unit tests for pycute.alg.copy and pycute.alg.ref.copy"""
 
+import inspect
+import json
 import unittest
+from pathlib import Path
 
 from pycute import *
 from pycute.alg import copy as copy_opt
 from pycute.alg.ref import copy as copy_ref
+
+NOTEBOOK = Path(__file__).resolve().parents[1] / "examples" / "algorithms" / "copy.ipynb"
 
 
 def _fill_iota(t: Tensor) -> None:
@@ -45,13 +50,13 @@ def _vector_slices(src_layout, dst_layout) -> tuple[Layout, Layout]:
   src_c, dst_c = logical_divide(src, common), logical_divide(dst, common)
 
   null_dst = nullspace(dst_c.layout[0])
-  src_n = logical_divide(src_c, (null_dst, None))[(0, None), None]
-  dst_n = logical_divide(dst_c, (null_dst, None))[(0, None), None]
+  src_n = logical_divide[0](src_c, null_dst)[(0, None), None]
+  dst_n = logical_divide[0](dst_c, null_dst)[(0, None), None]
 
   # Align both to destination-memory order, then take the common contiguous run
   inv_dst = right_inverse(dst_n.layout[0])
-  src_v = logical_divide(src_n, (inv_dst, None))
-  dst_v = logical_divide(dst_n, (inv_dst, None))
+  src_v = logical_divide[0](src_n, inv_dst)
+  dst_v = logical_divide[0](dst_n, inv_dst)
 
   run = coalesce(src_v.layout[0][0])[0]
   vec = size(run) if stride(run) == 1 else 1
@@ -240,6 +245,29 @@ class TestCopyOpt(unittest.TestCase):
     self.assertEqual(opt_offsets, ref_offsets)          # no reordering available
     self.assertEqual(len(opt_offsets), 35)              # and no writes saved
     self.assertEqual(ref_values, opt_values)
+
+
+class TestCopyNotebook(unittest.TestCase):
+  """`examples/algorithms/copy.ipynb` prints `copy`'s source with
+  `inspect.getsource`, so its *stored* output is a verbatim second copy of this
+  module that goes stale the moment `copy` is edited."""
+
+  def test_stored_source_output_is_current(self):
+    if not NOTEBOOK.exists():
+      self.skipTest(f"{NOTEBOOK} not present")
+    cells = json.loads(NOTEBOOK.read_text(encoding="utf-8"))["cells"]
+    printers = [
+      c for c in cells
+      if c["cell_type"] == "code" and "inspect.getsource(copy)" in "".join(c["source"])
+    ]
+    self.assertEqual(len(printers), 1, "expected exactly one cell printing copy's source")
+
+    stored = "".join(
+      "".join(o.get("text", []))
+      for o in printers[0]["outputs"] if o.get("output_type") == "stream"
+    )
+    self.assertEqual(stored.strip(), inspect.getsource(copy_opt).strip(),
+                     "re-run the notebook cell that prints `copy`'s source")
 
 
 if __name__ == "__main__":
