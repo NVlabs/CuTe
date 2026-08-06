@@ -52,7 +52,7 @@ class F2(StrideScalar):
 
   # ------------------------------------------------------------------
   # Algebra
-  # ------------------------------------------------------------------  
+  # ------------------------------------------------------------------
 
   # An operand of a type `F2` cannot combine with yields `NotImplemented`, so
   # Python falls back on that operand's reflected operator -- which is how an
@@ -169,9 +169,6 @@ class F2(StrideScalar):
     extents always do. A shape that carries is rejected rather than decomposed
     into a coordinate that will not recompose.
 
-    Only statically-known extents can be checked; a symbolic extent is taken on
-    faith.
-
     Examples:
       idx2crd(F2(0b10110), (4, 8))    == (F2(0b10), F2(0b101))
       idx2crd(F2(0b10110), (3, 3))    == (F2(0b1), F2(0b1101))   # only 3 is a divisor
@@ -182,7 +179,7 @@ class F2(StrideScalar):
     def divmod_seq(idx):
       pps = 1                            # Running colex prefix product, in Z
       for s in flatten(shape)[:-1]:      # The last extent is never a divisor
-        if is_static(pps) and is_static(s) and F2(pps) * F2(s) != pps * s:
+        if F2(pps) * F2(s) != pps * s:
           raise ValueError(f"_idx2crd({self}, {shape}): extent {s} carries into the prefix "
                            f"product {pps}, so the F2 and Z decompositions of {shape} differ")
         pps *= s
@@ -235,7 +232,7 @@ class Swizzle:
                    ^-^       ^-^      Bits is the number of bits in the mask
                       ^---------^     Shift is the distance to shift the YYY mask
                                         (pos shifts YYY to the right, neg shifts YYY to the left)
-  
+
   e.g. Given
   0bxxxxxxxxxxxxxxxxYYxxxxxxxxxZZxxx
   the result is
