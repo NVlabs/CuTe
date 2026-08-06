@@ -10,12 +10,12 @@ from .htuple import *
 
 
 @ModeOpDecorator
-def stride(obj, mode=()) -> Stride:
+def stride(obj, *, mode=()) -> Stride:
   """Get an object's stride"""
   if hasattr(obj, 'stride'):       # Use .stride() or .stride if available (Layouts/Tensors/Other)
-    return get(obj.stride() if callable(getattr(obj, 'stride')) else obj.stride, mode)
+    return get(obj.stride() if callable(getattr(obj, 'stride')) else obj.stride, mode=mode)
   if mode != ():                  # Not a Layout or Tensor, so slice once and recurse
-    return stride(obj[mode[0]], mode[1:])
+    return stride(obj[mode[0]], mode=mode[1:])
   if obj is None or is_stride_scalar(obj):
     return obj
   try:
@@ -66,25 +66,25 @@ def prefix_product(a: Shape, init: Stride = 1) -> Stride:
 
 
 @ModeOpDecorator
-def coshape(obj, mode=()) -> Shape:
+def coshape(obj, *, mode=()) -> Shape:
   """
   Shape of the codomain
   """
   if mode != ():
-    return coshape(get(obj, mode))
+    return coshape(get(obj, mode=mode))
   if hasattr(obj, '_coshape'):       # Use ._coshape() or ._coshape if available (Layouts/Other)
     return obj._coshape()
   raise TypeError(f"coshape not supported for type {type(obj)}")
 
 
 @ModeOpDecorator
-def coprofile(obj, mode=()) -> Profile:
+def coprofile(obj, *, mode=()) -> Profile:
   """
   Profile of the codomain: an HTuple congruent to `coshape(obj)` whose leaf values
   carry no meaning.
   """
   if mode != ():
-    return coprofile(get(obj, mode))
+    return coprofile(get(obj, mode=mode))
   if hasattr(obj, '_coprofile'):     # Use ._coprofile() if available (Layouts/Other)
     return obj._coprofile()
   raise TypeError(f"coprofile not supported for type {type(obj)}")

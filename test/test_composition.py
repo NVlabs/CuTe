@@ -75,6 +75,24 @@ class TestComposition:
     self.postcondition_composition(Layout(7, 11), Layout(3, 4))
     self.postcondition_composition(Layout(7, 11), Layout((3,5), (6,3)))
 
+  def test_composition_mode(self):
+    # `composition[mode](A, B)` composes that one mode of A with B and leaves
+    # every other mode of A alone.
+    A = Layout(((6, 2), 5), ((8, 2), 1))
+    B = Layout((4, 3), (3, 1))
+
+    assert composition[0](A, B) == make_layout([composition(A[0], B), A[1]])
+    assert composition[0](A, B) == composition(A, (B,))
+    assert composition[0][0](A, Layout(3, 2)) == composition[0, 0](A, Layout(3, 2))
+    assert composition(A, B, mode=(0,)) == composition[0](A, B)
+    assert composition(A, B, mode=()) == composition(A, B)
+
+    # Post-conditions hold of the composed mode
+    R = composition[0](A, B)
+    assert compatible(B, get[0](R))
+    for i in range(size(B)):
+      assert get[0](R)(i) == get[0](A)(B(i))
+
   def test_composition_fails(self):
 
     # Violates stride divisibility condition

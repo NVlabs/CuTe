@@ -113,24 +113,35 @@ class TestGetLift:
   """`get` and `lift` are inverses on the same path."""
 
   def test_get_with_path(self):
-    assert get(((0, 0, (0, 0, 0, 42)),), (0, 2, 3)) == 42
-    assert get((1, (2, (3, 4))), (1, 1, 0)) == 3
-    assert get(7, ()) == 7             # empty path is identity
+    assert get(((0, 0, (0, 0, 0, 42)),), mode=(0, 2, 3)) == 42
+    assert get((1, (2, (3, 4))), mode=(1, 1, 0)) == 3
+    assert get(7, mode=()) == 7        # empty path is identity
 
   def test_get_subscript_form(self):
-    """`get[i, j, k](x)` is equivalent to `get(x, (i, j, k))`."""
+    """`get[i, j, k](x)` is equivalent to `get(x, mode=(i, j, k))`."""
     assert get[0, 2, 3](((0, 0, (0, 0, 0, 42)),)) == 42
     assert get[1, 1, 0]((1, (2, (3, 4)))) == 3
 
   def test_lift_round_trip(self):
-    """`get(lift(x, mode), mode) == x` for any `x` and `mode`."""
+    """`get[mode](lift[mode](x)) == x` for any `x` and `mode`."""
     for mode in [(), (0,), (1,), (0, 2, 3), (1, 1, 0)]:
       x = 99
-      assert get(lift(x, mode), mode) == x
+      assert get[mode](lift[mode](x)) == x
 
   def test_lift_zero_padded(self):
     """`lift` produces a zero-padded structure with the value at `mode`."""
-    assert lift(42, (0, 2, 3)) == ((0, 0, (0, 0, 0, 42)),)
+    assert lift[0, 2, 3](42) == ((0, 0, (0, 0, 0, 42)),)
+
+  def test_lift_pad(self):
+    """`pad` chooses the filler; `None` builds a structure that names one mode
+    and says nothing about the others."""
+    assert lift[1, 0](42, pad=None) == (None, (42,))
+    assert lift(42, mode=(1, 0), pad=None) == (None, (42,))
+
+  def test_lift_pad_is_keyword_only(self):
+    """`pad` is keyword-only, so it is never mistaken for the value to lift."""
+    with pytest.raises(TypeError):
+      lift[1](42, None)
 
 
 class TestSelectTake:
@@ -138,7 +149,7 @@ class TestSelectTake:
   `[begin, end)`. Both always return a tuple."""
 
   def test_select_on_tuple(self):
-    assert select((1, 2, 3, 4), (0, 2)) == (1, 3)
+    assert select((1, 2, 3, 4), mode=(0, 2)) == (1, 3)
     assert select[0, 2]((1, 2, 3, 4)) == (1, 3)
     assert select[2]((1, 2, 3, 4)) == (3,)
     assert select[0, 1, 3]((1, 2, 3, 4)) == (1, 2, 4)
@@ -157,7 +168,7 @@ class TestSelectTake:
     assert make_layout(select[0, 1, 3](A)) == Layout((2, 3, 7), (1, 2, 30))
 
   def test_take_on_tuple(self):
-    assert take((1, 2, 3, 4), (1, 3)) == (2, 3)
+    assert take((1, 2, 3, 4), mode=(1, 3)) == (2, 3)
     assert take[1, 3]((1, 2, 3, 4)) == (2, 3)
     assert take[0, 4]((1, 2, 3, 4)) == (1, 2, 3, 4)     # full
     assert take[1, 1]((1, 2, 3, 4)) == ()               # empty
@@ -219,7 +230,35 @@ class TestFlattenUnflatten:
 class TestModeOpDecorator:
   """The ModeOpDecorator allows `op[i, j, ...](x)` as shorthand for
   `op(get[i, j, ...](x))`. This applies to `shape`, `size`, `rank`,
-  `depth`, `stride`, `coshape`, and `coprofile`."""
+  `depth`, `stride`, `coshape`, and `coprofile` -- and, for ops that take
+  more than one argument, to `logical_divide`."""
+
+  def test_mode_forms_agree(self):
+    """The subscript and keyword spellings of `mode` name the same path, and
+    subscripts accumulate."""
+    A = Layout(((2, 3), 4), ((4, 8), 1))
+    assert shape[0, 1](A) == shape(A, mode=(0, 1)) == 3
+    assert shape[0][1](A) == shape[0](A, mode=1) == 3
+    assert shape[0, 1](A) == shape(A, mode=[0, 1])     # a list path is a path too
+
+  def test_mode_is_keyword_only(self):
+    """`mode` is keyword-only, so a path is never mistaken for an argument of
+    the operation."""
+    A = Layout(((2, 3), 4), ((4, 8), 1))
+    with pytest.raises(TypeError):
+      shape(A, (0, 1))
+
+  def test_multiple_arguments(self):
+    """Arguments other than `mode` pass through, so an op of any arity is
+    subscriptable."""
+    @ModeOpDecorator
+    def op(a, b, *, mode=(), c=None):
+      return (a, b, mode, c)
+
+    assert op(1, 2) == (1, 2, (), None)
+    assert op[3](1, 2) == (1, 2, (3,), None)
+    assert op[3, 4](1, 2, c=5) == (1, 2, (3, 4), 5)
+    assert op[3](1, 2, mode=4, c=5) == (1, 2, (3, 4), 5)
 
   def test_mode_indexed_shape(self):
     A = Layout(((2, 3), 4), ((4, 8), 1))

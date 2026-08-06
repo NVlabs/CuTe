@@ -50,6 +50,18 @@ class TestCoalesceZ:
     self.postcondition_coalesce_z(Layout(((2,2),(2,2)), ((1,4),(8,32))))
 
 
+  def test_coalesce_z_mode(self):
+    # `coalesce_z[mode](A)` coalesces that one mode of A and leaves the others
+    # alone, keeping the trailing size-1 modes that `coalesce` would drop.
+    A = Layout(((2, (1, 6)), (3, 4, 1)), ((1, (6, 2)), (100, 300, 0)))
+
+    assert coalesce_z[1](A) == make_layout([A[0], coalesce_z(A[1])])
+    assert coalesce_z[1](A) == coalesce_z(A, (None, 1))
+    assert coalesce_z(A, mode=(1,)) == coalesce_z[1](A)
+    assert coalesce_z(A, mode=()) == coalesce_z(A)
+    assert shape(coalesce_z[1](A))[-1] == (12, 1)   # size-1 mode preserved
+
+
   def test_coalesce_z_coord(self):
     self.postcondition_coalesce_z(Layout(1,E(0)))
     self.postcondition_coalesce_z(Layout(1,E(1)))

@@ -69,25 +69,27 @@ Wrap a non-tuple in a 1-tuple; recursively unwrap 1-tuples.
 ((7,), (7,), 42)
 ```
 
-### `get(obj, mode=())`
+### `get(obj, *, mode=())`
 
-Index by path (the path must be a tuple). Subscript form
+Index by path (a tuple of indices). `mode` is keyword-only; the subscript form
 `get[i, j, ...](obj)` is equivalent. Test:
 [`test_htuple.py`](../test/test_htuple.py),
 [`test_layout.py`](../test/test_layout.py).
 
 ```python
->>> get(((0, 0, (0, 0, 0, 42)),), (0, 2, 3))
+>>> get[0, 2, 3](((0, 0, (0, 0, 0, 42)),))
 42
 ```
 
-### `lift(obj, mode=())`
+### `lift(obj, *, pad=0, mode=())`
 
-Insert `obj` at a given path inside a zero-padded structure.
+Insert `obj` at a given path inside a `pad`-filled structure.
 
 ```python
->>> lift(42, (0, 2, 3))
+>>> lift[0, 2, 3](42)
 ((0, 0, (0, 0, 0, 42)),)
+>>> lift[1](42, pad=None)
+(None, 42)
 ```
 
 ### `transform_apply_leaf(g, f, htuple, *tuples)` / `transform_leaf(f, *tuples)`
@@ -127,7 +129,7 @@ Product of each top-level mode — returns a flat tuple. Test:
 (6, 4, 30)
 ```
 
-### `select(obj, mode=())` / `take(obj, mode=())`
+### `select(obj, *, mode=())` / `take(obj, *, mode=())`
 
 Pick out sub-objects by index. `select` takes an arbitrary sequence of
 indices (`select[1, 3](A) == (A[1], A[3])`); `take` takes a `[begin, end)`
@@ -159,7 +161,7 @@ Extract leaves of `B` corresponding to `None`/non-`None` leaves of
 ((5, 7, 9),)
 ```
 
-### `zip_leaves(*tuples)` / `fold_leaf(fn, v, *tuples)`
+### `zip_leaves(htuple, *tuples)` / `fold_leaf(fn, v, *tuples)`
 
 Internal leaf iterators used by `inner_product` and related helpers. Exported
 for advanced callers mirroring the C++ CuTe utilities.
@@ -261,7 +263,7 @@ Tests: throughout (`test_atuple.py`, `test_htuple.py`, etc.).
 The `Stride` type alias and the `StrideScalar` ABC now live in
 [`typedefs`](#module-typedefs).
 
-### `stride(obj, mode=())`
+### `stride(obj, *, mode=())`
 
 Get the stride of a layout/tensor or pass through a stride literal.
 Subscript form `stride[i](obj)` works the same way.
@@ -288,7 +290,7 @@ Test: [`test_htuple.py::TestHTuple::test_prefix_product`](../test/test_htuple.py
 ((1, 2), (6, 12, 12), (24, 120, 240))
 ```
 
-### `coshape(obj, mode=())` / `coprofile(obj, mode=())`
+### `coshape(obj, *, mode=())` / `coprofile(obj, *, mode=())`
 
 Codomain shape and codomain profile of a layout. `coshape` computes the
 codomain's extents; `coprofile` fixes only its tuple/leaf structure and is
@@ -314,21 +316,21 @@ Tests: [`test/test_htuple.py`](../test/test_htuple.py),
 The `IntTuple` / `Shape` / `Coord` type aliases live in
 [`typedefs`](#module-typedefs).
 
-### `shape(obj, mode=())`
+### `shape(obj, *, mode=())`
 
 Shape of a layout/tensor; pass-through for tuples and integers.
 
-### `size(obj, mode=())`
+### `size(obj, *, mode=())`
 
-Product of leaves of `shape(obj, mode)`.
+Product of leaves of `shape[mode](obj)`.
 
-### `rank(obj, mode=())`
+### `rank(obj, *, mode=())`
 
-Number of top-level entries of `shape(obj, mode)`.
+Number of top-level entries of `shape[mode](obj)`.
 
-### `depth(obj, mode=())`
+### `depth(obj, *, mode=())`
 
-Depth of the deepest tuple in `shape(obj, mode)`.
+Depth of the deepest tuple in `shape[mode](obj)`.
 
 ### `compatible(a, b)`
 
@@ -575,10 +577,10 @@ mode of the result. Tests:
 Layout((3, (5, 1), 2), (1, (7, 2), 42))
 ```
 
-### `make_layout_like(layout)` / `make_ordered_layout(shape, order)`
+### `make_layout_like(layout)` / `make_ordered_layout(_shape, _order)`
 
 Build a layout with the same shape/stride structure as an existing layout, or
-with modes permuted according to `order`. See [`layout.py`](../pycute/layout.py).
+with modes permuted according to `_order`. See [`layout.py`](../pycute/layout.py).
 
 ### `Tiler` (type alias)
 
@@ -631,13 +633,14 @@ integer or tuple, promote via `tiler_to_layout`. This is what allows
 `coalesce(layout)`, `coalesce(tensor)`, and `coalesce((4, 8))` to all
 work.
 
-### `coalesce(A, profile=1)`
+### `coalesce(A, profile=1, *, mode=())`
 
 Simplify `A` as a function from `int` to `int`. By-mode coalesce when
-`profile` is a tuple. Tests:
+`profile` is a tuple; a `mode` coalesces that one mode of `A` and leaves the
+others unchanged. Tests:
 [`test_coalesce.py`](../test/test_coalesce.py).
 
-> *Post-conditions:* `depth(R) ≤ 1` (or `≤ depth(profile)`),
+> *Post-conditions:* `depth(R) ≤ 1` (or `≤ depth(profile)`, within `mode`),
 > `R(i) == A(i)` for `i ∈ [0, |A|)`.
 
 ```python
@@ -645,25 +648,30 @@ Simplify `A` as a function from `int` to `int`. By-mode coalesce when
 Layout(12, 1)
 >>> coalesce(Layout((2, (1, 6)), (1, (6, 2))), (1, 1))
 Layout((2, 6), (1, 2))                # by-mode: each mode coalesced independently
+>>> coalesce[1](Layout((3, (2, 6)), (1, (3, 6))))
+Layout((3, 12), (1, 3))               # mode 1 only
 ```
 
-### `coalesce_z(A, profile=1)`
+### `coalesce_z(A, profile=1, *, mode=())`
 
 Like `coalesce`, but preserves trailing size-1 modes so that *every*
 integer (not just in-bounds integers) maps consistently. Tests:
 [`test_coalesce_z.py`](../test/test_coalesce_z.py).
 
-### `composition(A, B)`
+### `composition(A, B, *, mode=())`
 
-Group composition `R = A ∘ B`. Tests:
+Group composition `R = A ∘ B`. A `mode` composes that one mode of `A` and
+leaves the others unchanged. Tests:
 [`test_composition.py`](../test/test_composition.py).
 
-> *Post-conditions:* `compatible(B, R)`, `R(i) == A(B(i))` for every
-> `i ∈ Z(B)`.
+> *Post-conditions:* `compatible(B, get[mode](R))`,
+> `get[mode](R)(i) == get[mode](A)(B(i))` for every `i ∈ Z(B)`.
 
 ```python
 >>> composition(Layout((6, 2), (8, 2)), Layout((4, 3), (3, 1)))
 Layout(((2, 2), 3), ((24, 2), 8))
+>>> composition[1](Layout((4, 6), (1, 4)), Layout(3, 2))     # mode 1 only
+Layout((4, 3), (1, 8))
 ```
 
 ### `complement(A, extend=None)`
@@ -683,35 +691,44 @@ Layout((2, 1), (1, 8))               # minimal: just plugs the size-1 gap
 Layout((2, 3), (1, 8))
 ```
 
-### `logical_divide(A, B)`
+### `logical_divide(A, B, *, mode=())`
 
 Split `A` into a tile of shape `B` (mode 0) and a layout of those tiles
-(mode 1). Tests:
-[`test_logical_divide.py`](../test/test_logical_divide.py).
+(mode 1). A `mode` divides that one mode of `A` and leaves the others
+unchanged; the subscript form `logical_divide[i, j, ...](A, B)` is equivalent.
+Tests: [`test_logical_divide.py`](../test/test_logical_divide.py).
 
-> *Post-conditions:* `rank(R) == 2`, `compatible(B, R[0])`,
-> `R(i, 0) == A(B(i))`, every offset of `A` appears in the image of `R`.
+> *Post-conditions:* for `mode == ()`, `rank(R) == 2`,
+> `compatible(B, R[0])`, `R(i, 0) == A(B(i))`, and every offset of `A` appears
+> in the image of `R`; for a non-empty `mode` the same holds of
+> `get[mode](R)`.
 
 ```python
 >>> logical_divide(Layout(24, 1), Layout(4, 2))
 Layout((4, (2, 3)), (2, (1, 8)))
+>>> logical_divide[1](Layout((3, 8)), Layout(4, 2))     # mode 1 only
+Layout((3, (4, 2)), (1, (6, 3)))
 ```
 
-### `zipped_divide(A, B)`
+### `zipped_divide(A, B, *, mode=())`
 
 `logical_divide(A, tiler_to_layout(B))`. Convenience for
-"interpret `B` as a tiler".
+"interpret `B` as a tiler". A `mode` zips the tiler into that one mode of `A`.
 
-### `logical_product(A, B)`
+### `logical_product(A, B, *, mode=())`
 
-Reproduce `A` as a tile across the layout `B`. Tests:
+Reproduce `A` as a tile across the layout `B`. A `mode` reproduces that one
+mode of `A` and leaves the others unchanged. Tests:
 [`test_logical_product.py`](../test/test_logical_product.py).
 
-> *Post-conditions:* `rank(R) == 2`, `R[0] == A`, `compatible(B, R[1])`.
+> *Post-conditions:* `rank(get[mode](R)) == 2`,
+> `get[mode](R)[0] == get[mode](A)`, `compatible(B, get[mode](R)[1])`.
 
 ```python
 >>> logical_product(Layout((2, 2), (4, 1)), Layout(6, 1))
 Layout(((2, 2), (2, 3)), ((4, 1), (2, 8)))
+>>> logical_product[0](Layout((3, 5), (1, 20)), Layout(4, 1))    # mode 0 only
+Layout(((3, 4), 5), ((1, 3), 20))
 ```
 
 ### `blocked_product(A, B)`
@@ -1085,7 +1102,7 @@ is the authoritative source. Each PyCuTe test defines a
 | [`test_coalesce_z.py`](../test/test_coalesce_z.py) | `coalesce_z` post-conditions: same as `coalesce` but on the extended domain |
 | [`test_composition.py`](../test/test_composition.py) | `composition` post-conditions: `compatible(B, R)`, `R(i) == A(B(i))` |
 | [`test_complement.py`](../test/test_complement.py) | `complement` post-conditions: weakly congruent codomain, ordered, disjoint; strong inverse condition |
-| [`test_logical_divide.py`](../test/test_logical_divide.py) | `logical_divide` post-conditions and the SM70 MMA associativity test |
+| [`test_logical_divide.py`](../test/test_logical_divide.py) | `logical_divide` post-conditions, the by-mode `logical_divide[i, j]` form, and the SM70 MMA associativity test |
 | [`test_logical_product.py`](../test/test_logical_product.py) | `logical_product` post-conditions: `rank == 2`, `R[0] == A`, `compatible(B, R[1])` |
 | [`test_blocked_raked.py`](../test/test_blocked_raked.py) | `blocked_product` and `raked_product`: rank-sensitive products, post-conditions, blocked-vs-raked image equivalence |
 | [`test_inverse_right.py`](../test/test_inverse_right.py) | `right_inverse` post-condition |

@@ -273,7 +273,7 @@ class TestIsBasis:
     assert is_basis(7)
     assert basis_repr(7) == [(7, ())]
     # Zero is also a rank-zero basis element: 0 == 0 * E(). This makes
-    # `proj(x, 0) == get(x, ()) == x` well-defined.
+    # `proj(x, 0) == get[()](x) == x` well-defined.
     assert is_basis(0)
     assert basis_repr(0) == [(0, ())]
 

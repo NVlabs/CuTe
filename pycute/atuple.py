@@ -426,7 +426,7 @@ def proj(x, profile):
   rep = basis_repr(profile)
   if len(rep) != 1:
     raise TypeError(f"proj: {profile!r} is not a basis element")
-  return get(x, rep[0][1])
+  return get(x, mode=rep[0][1])
 
 
 def unit(profile):

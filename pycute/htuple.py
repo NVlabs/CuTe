@@ -5,7 +5,7 @@
 Functions for manipulating Hierarchical Tuples
 """
 
-from functools import reduce
+from functools import reduce, update_wrapper
 import operator
 from itertools import zip_longest
 
@@ -82,33 +82,47 @@ def unwrap(x: HTuple) -> HTuple:
 
 
 def ModeOpDecorator(func):
+  """
+  Expose the keyword-only `mode` parameter of `func` as a subscript.
+
+  The operation collects `mode` from its subscripts and forwards every other
+  argument to `func` untouched, so an operation of any arity can be indexed.
+  """
   class ModeOp:
     """
     A generic class for operations that support mode indexing.
 
-    This enables syntax like:
-    op(obj)       <==>  op(obj, mode=[])    # Apply op to obj with no mode filtering
-    op[0](obj)    <==>  op(obj, mode=[0])   # Apply op to obj after getting mode 0
-    op[0,1](obj)  <==>  op(obj, mode=[0,1]) # Apply op to obj after getting modes (0,1)
+    The subscripted modes are prepended to the `mode` given at the call site;
+    all other arguments pass through to the operation:
+
+    op(A)                <==>  op(A, mode=())        # Apply op to A with no mode filtering
+    op[0](A)             <==>  op(A, mode=(0,))      # Apply op to mode 0 of A
+    op[0,1](A)           <==>  op(A, mode=(0,1))     # Apply op to mode (0,1) of A
+    op[0][1](A)          <==>  op(A, mode=(0,1))     # Subscripts accumulate
+    op[0](A, B)          <==>  op(A, B, mode=(0,))   # Any number of arguments
+    op[0](A, B, mode=1)  <==>  op(A, B, mode=(0,1))
+
+    `mode` is keyword-only, so a mode is never mistaken for an argument of `op`.
     """
 
     def __init__(self, func, mode=()):
       self.func = func
       self.mode = mode
+      update_wrapper(self, func)    # Present func's own name, docstring and signature
 
-    def __call__(self, obj, mode=()):
-      """Apply the function with optional mode specification."""
-      return self.func(obj, self.mode + wrap(mode))
+    def __call__(self, *args, mode=(), **kwargs):
+      """Apply the function, prepending the subscripted modes to its `mode`."""
+      return self.func(*args, mode=self.mode + tuple(wrap(mode)), **kwargs)
 
     def __getitem__(self, mode):
       """Return a new instance with new modes appended to existing modes."""
-      return ModeOp(self.func, self.mode + wrap(mode))
+      return ModeOp(self.func, self.mode + tuple(wrap(mode)))
 
   return ModeOp(func)
 
 
 @ModeOpDecorator
-def get(obj: HTuple, mode=()) -> HTuple:
+def get(obj: HTuple, *, mode=()) -> HTuple:
   """
   Get the mode[0]th mode, then the mode[1]th mode, etc of obj
 
@@ -117,54 +131,55 @@ def get(obj: HTuple, mode=()) -> HTuple:
     mode: Sequence of modes to retrieve in order
 
   Example:
-    >>> get(((0, 0, (0, 0, 0, 42)),), [0,2,3])
-    42
     >>> get[0,2,3](((0, 0, (0, 0, 0, 42)),))
+    42
+    >>> get(((0, 0, (0, 0, 0, 42)),), mode=(0,2,3))
     42
 
   Post-condition:
-    get(lift(x, mode), mode) == x
+    get[mode](lift[mode](x)) == x
   """
   if mode == ():
     return obj
   if hasattr(obj, 'get'):
     return obj.get(mode)
-  return get(obj[mode[0]], mode[1:])
+  return get(obj[mode[0]], mode=mode[1:])
 
 
 @ModeOpDecorator
-def lift(obj, mode=()):
+def lift(obj, *, pad=0, mode=()):
   """
   Create an object with obj as the mode-th element.
 
   Args:
-    obj: The object to index into
+    obj: The object to place at `mode`
+    pad: The value filling the modes that `mode` does not name
     mode: Sequence of indices to apply in order
 
   Example:
-    >>> lift(42, [0,2,3])
-    ((0, 0, (0, 0, 0, 42)),)
     >>> lift[0,2,3](42)
-    [0, 0, [0, 0, 0, 42]]
+    ((0, 0, (0, 0, 0, 42)),)
+    >>> lift[1](42, pad=None)
+    (None, 42)
 
   Post-condition:
-    get(lift(x, mode), mode) == x
+    get[mode](lift[mode](x)) == x
   """
   result = obj
-  [result := (0,) * i + (result,) for i in reversed(mode)]
+  [result := (pad,) * i + (result,) for i in reversed(mode)]
   return result
 
 
 @ModeOpDecorator
-def select(obj, mode=()):
+def select(obj, *, mode=()):
   """
   Select the modes of obj at the given modes.
   """
-  return tuple(get(obj, i) for i in mode)
+  return tuple(get(obj, mode=i) for i in mode)
 
 
 @ModeOpDecorator
-def take(obj, mode=()):
+def take(obj, *, mode=()):
   """
   Select all modes of obj between mode[0] and mode[1].
   """

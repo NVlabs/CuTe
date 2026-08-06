@@ -345,6 +345,28 @@ True
 [`test_logical_divide.py`](../test/test_logical_divide.py) for many
 examples.)
 
+### Dividing a single mode
+
+A `None` tiler leaf is a no-op, so a tiler names the modes it divides and says
+nothing about the others. Subscripting `logical_divide` builds that tiler for
+you: `logical_divide[i, j, ...](A, B)` divides mode `(i, j, ...)` of `A` by `B`
+and leaves every other mode of `A` unchanged.
+
+```python
+>>> A = Layout((3, 28))
+>>> logical_divide[1](A, Layout(4, 1))          # divide mode 1 only
+Layout((3, (4, 7)), (1, (3, 12)))
+>>> logical_divide(A, (None, Layout(4, 1)))     # the tiler it builds
+Layout((3, (4, 7)), (1, (3, 12)))
+```
+
+Every algebra operation whose right-hand side applies by-mode takes the same
+subscript, each rebuilding `A` with only the named mode changed:
+`coalesce[1](A)`, `composition[0](A, B)`, `logical_product[0](A, B)`, and
+`zipped_divide[0](A, B)`. This is the
+[mode-indexed operator](./01_htuple.md#mode-indexed-operators) convention that
+`shape[0]`, `size[0, 1]`, and `get[0]` also follow.
+
 ### `zipped_divide`, `tiled_divide`, `flat_divide`
 
 `logical_divide` preserves *semantics* of each mode (M-mode in, M-mode out)

@@ -85,15 +85,15 @@ worked examples.
 
 ## Hierarchical access: `get`, `lift`, `wrap`, `unwrap`
 
-### `get(obj, mode=())`
+### `get(obj, *, mode=())`
 
-Index into a hierarchical structure with a *path* (must be a tuple):
+Index into a hierarchical structure with a *path* (a tuple of indices):
 
 ```python
 >>> from pycute import *
->>> get(((0, 0, (0, 0, 0, 42)),), (0, 2, 3))
+>>> get[0, 2, 3](((0, 0, (0, 0, 0, 42)),))            # subscript form
 42
->>> get[0, 2, 3](((0, 0, (0, 0, 0, 42)),))   # subscript form
+>>> get(((0, 0, (0, 0, 0, 42)),), mode=(0, 2, 3))     # keyword form
 42
 ```
 
@@ -117,24 +117,28 @@ also lets `size`, `rank`, `depth`, `shape`, and `stride` accept a mode-path the 
 This is the moral equivalent of `cute::shape<0>(A)` and `cute::size<1>(A)` in
 C++ CuTe.
 
-### `lift(value, mode=())`
+### `lift(obj, *, pad=0, mode=())`
 
-The dual of `get`. Inserts `value` at a given path inside an empty
+The dual of `get`. Inserts `obj` at a given path inside an empty
 zero-padded structure:
 
 ```python
->>> lift(42, (0, 2, 3))
+>>> lift[0, 2, 3](42)
 ((0, 0, (0, 0, 0, 42)),)
->>> get(lift(42, (0, 2, 3)), (0, 2, 3))
+>>> get[0, 2, 3](lift[0, 2, 3](42))
 42
+>>> lift[1](42, pad=None)      # `None` says nothing about the other modes
+(None, 42)
 ```
 
-`get(lift(x, mode), mode) == x` always holds. The path argument must be
-a tuple; the subscript form `lift[0, 2, 3](42)` works as well.
+`lift` takes exactly one positional argument, the value: both `pad` and `mode`
+are keyword-only, so neither can be mistaken for the value being lifted.
+
+`get[mode](lift[mode](x)) == x` always holds.
 
 (See [`test_htuple.py::TestGetLift::test_lift_round_trip`](../test/test_htuple.py).)
 
-### `select(obj, mode=())`
+### `select(obj, *, mode=())`
 
 Return a tuple of the *top-level* sub-objects at the given indices. The
 result is always a tuple — even for a single index — so it can be passed
@@ -157,7 +161,7 @@ This is the moral equivalent of `cute::select<I...>(A)` in C++ CuTe — but
 because PyCuTe's `select` returns the underlying tuple of sub-layouts, you
 combine it with `make_layout` to recover the C++ "single-Layout" result.
 
-### `take(obj, mode=())`
+### `take(obj, *, mode=())`
 
 Return the contiguous range of sub-objects from index `mode[0]` to
 `mode[1]` (exclusive). The result is a tuple, like `select`'s. Reverse
@@ -191,7 +195,7 @@ Small helpers used pervasively in the implementation:
 
 These functions are the workhorses inside the layout algebra.
 
-### `leaves(t)` and `flatten(t)`
+### `leaves(t)` and `flatten(t, g=tuple)`
 
 `leaves(t)` is a generator over the leaf elements of `t` in left-to-right
 order. `flatten(t, g=tuple)` materializes that generator with a builder:
@@ -351,9 +355,26 @@ to the mode at this path". PyCuTe expresses this uniformly with the
 * [`coshape`](../pycute/stride.py) and `coprofile`.
 * [`get`](../pycute/htuple.py), [`lift`](../pycute/htuple.py),
   [`select`](../pycute/htuple.py), and [`take`](../pycute/htuple.py).
+* [`coalesce`](../pycute/algebra.py) and `coalesce_z`: `coalesce[1](A)`.
+* [`composition`](../pycute/algebra.py): `composition[0](A, B)`.
+* [`logical_divide`](../pycute/algebra.py) and `zipped_divide`:
+  `logical_divide[0, 1](A, B)`.
+* [`logical_product`](../pycute/algebra.py): `logical_product[0](A, B)`.
 
 In C++ CuTe these read as `cute::shape<0>(a)`, `cute::size<0,1>(a)`, etc.;
 PyCuTe spells the template-argument list as a Python subscript.
+
+The path is the operation's keyword-only `mode` parameter, which it collects from
+the subscripts — everything else is an ordinary argument, so an operation of any
+arity can be indexed. Subscripts accumulate (`op[0][1] == op[0, 1]`), and `mode=`
+names the same path as a subscript: `shape(A, mode=(0, 1))` is `shape[0, 1](A)`.
+Because `mode` is keyword-only, a path can never be mistaken for an argument of
+the operation itself.
+
+The two groups read differently. A *query* returns a property of the named mode,
+so `shape[0, 1](A)` is `shape(get[0, 1](A))`. An *algebra operation* rebuilds
+`A`, so `logical_divide[0, 1](A, B)` is `A` with mode `(0, 1)` replaced by
+`logical_divide(get[0, 1](A), B)` and every other mode untouched.
 
 (See [`test_htuple.py::TestModeOpDecorator`](../test/test_htuple.py)
 for examples of `shape[i]`, `size[i, j]`, `rank[i]`, and `depth[i]`.)

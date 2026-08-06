@@ -56,6 +56,29 @@ class TestLogicalProduct:
     assert logical_product(A, tiler) == expected
 
 
+  def test_logical_product_mode(self):
+    # `logical_product[mode](A, B)` reproduces that one mode of A over B and
+    # leaves every other mode of A alone.
+    A = Layout((3, 5), (1, 20))
+    B = Layout(4, 1)
+
+    assert logical_product[0](A, B) == make_layout([logical_product(A[0], B), A[1]])
+    assert logical_product[1](A, B) == make_layout([A[0], logical_product(A[1], B)])
+    assert logical_product[0](A, B) == logical_product(A, (B,))
+    assert logical_product(A, B, mode=(0,)) == logical_product[0](A, B)
+    assert logical_product(A, B, mode=()) == logical_product(A, B)
+
+    # Post-conditions hold of the reproduced mode
+    R = logical_product[0](A, B)
+    assert rank(get[0](R)) == 2
+    assert get[0](R)[0] == get[0](A)
+    assert compatible(B, get[0](R)[1])
+
+    # The named mode must exist
+    with pytest.raises(ValueError):
+      logical_product[2](A, B)
+
+
   def test_logical_product_types(self):
     # Behavior of logical_product across argument types
     # {None, int, tuple, Layout, Tiler, Tensor}. This encodes the CURRENT

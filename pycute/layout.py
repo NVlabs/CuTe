@@ -208,7 +208,7 @@ class Layout(LayoutBase):
     resultL = None
 
     for strideB, basisB in basis_repr(B.stride):
-      Ab = get(A, basisB)
+      Ab = get(A, mode=basisB)
       result_s, result_d = list(wrap(Ab.shape)), list(wrap(Ab.stride))
 
       # Truncate/extend result_s based on strideB * B.shape

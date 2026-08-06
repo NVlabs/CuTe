@@ -17,7 +17,7 @@ from .tensor import *
 # `zip_longest`, `ABC`, etc.). New PyCuTe definitions are picked up automatically.
 import types as _types
 _INCIDENTAL = {"annotations", "ABC", "abstractmethod", "Iterable", "Union",
-               "Any", "TypeAlias", "reduce", "zip_longest"}
+               "Any", "TypeAlias", "reduce", "update_wrapper", "zip_longest"}
 __all__ = sorted(
     _n for _n, _v in globals().items()
     if not _n.startswith("_")

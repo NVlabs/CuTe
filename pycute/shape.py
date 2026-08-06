@@ -14,12 +14,12 @@ from .stride import *
 
 
 @ModeOpDecorator
-def shape(obj, mode=()) -> Shape:
+def shape(obj, *, mode=()) -> Shape:
   """Get an object's shape"""
   if hasattr(obj, 'shape'):       # Use .shape() or .shape if available (Layouts/Tensors/Other)
-    return get(obj.shape() if callable(getattr(obj, 'shape')) else obj.shape, mode)
+    return get(obj.shape() if callable(getattr(obj, 'shape')) else obj.shape, mode=mode)
   if mode != ():                  # Not a Layout or Tensor, so slice once and recurse
-    return shape(obj[mode[0]], mode[1:])
+    return shape(obj[mode[0]], mode=mode[1:])
   if is_int(obj) or obj is None:
     return obj
   try:
@@ -29,22 +29,22 @@ def shape(obj, mode=()) -> Shape:
 
 
 @ModeOpDecorator
-def size(obj, mode=()) -> Integer:
+def size(obj, *, mode=()) -> Integer:
   """Get an object's size"""
-  return product(shape(obj, mode))
+  return product(shape(obj, mode=mode))
 
 
 @ModeOpDecorator
-def rank(obj, mode=()) -> int:
+def rank(obj, *, mode=()) -> int:
   """Get an object's rank"""
-  s = shape(obj, mode)
+  s = shape(obj, mode=mode)
   return len(s) if is_tuple(s) else 1
 
 
 @ModeOpDecorator
-def depth(obj, mode=()) -> int:
+def depth(obj, *, mode=()) -> int:
   """Get an object's depth"""
-  s = shape(obj, mode)
+  s = shape(obj, mode=mode)
   return 1 + reduce(max, map(depth, s)) if is_tuple(s) else 0
 
 

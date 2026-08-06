@@ -100,6 +100,53 @@ class TestLogicalDivide:
       assert logical_divide(layoutA, tiler) != zipped_divide(layoutA, tiler)
 
 
+  def test_logical_divide_mode(self):
+    # `logical_divide[mode](A, B)` divides that one mode of A by B and leaves
+    # every other mode of A alone.
+    A = Layout(((3, 8), 5), ((1, 3), 24))
+    B = Layout(4, 2)
+
+    assert logical_divide[0](A, B) == make_layout([logical_divide(A[0], B), A[1]])
+    assert logical_divide[1](A, B) == make_layout([A[0], logical_divide(A[1], B)])
+    assert logical_divide[0, 1](A, B) == make_layout(
+      [make_layout([A[0][0], logical_divide(A[0][1], B)]), A[1]])
+
+    # An empty mode is the whole layout, and the spellings of a mode agree
+    assert logical_divide(A, B, mode=()) == logical_divide(A, B)
+    assert logical_divide(A, B, mode=(0, 1)) == logical_divide[0, 1](A, B)
+    assert logical_divide[0][1](A, B) == logical_divide[0, 1](A, B)
+    assert logical_divide[0](A, B, mode=1) == logical_divide[0, 1](A, B)
+
+    # A mode of a Tensor divides its layout
+    T = make_tensor(A)
+    assert logical_divide[1](T, B).layout == logical_divide[1](A, B)
+
+    # The named mode must exist
+    with pytest.raises(ValueError):
+      logical_divide[2](A, B)
+
+
+  def test_zipped_divide_mode(self):
+    # `zipped_divide[mode](A, B)` zips the tiler into that one mode of A. The
+    # tiler's rank must suit the named mode, exactly as it must suit A itself.
+    A     = Layout(((9, 32), 7))
+    tiler = (Layout(3, 3), Layout((2, 4), (1, 8)))
+
+    assert zipped_divide[0](A, tiler) == make_layout([zipped_divide(A[0], tiler), A[1]])
+    assert zipped_divide[0](A, tiler) == logical_divide[0](A, tiler_to_layout(tiler))
+    assert zipped_divide(A, tiler, mode=(0,)) == zipped_divide[0](A, tiler)
+    assert zipped_divide(A, tiler, mode=()) == zipped_divide(A, tiler)
+
+    # A single-Layout tiler reaches a depth-0 mode
+    assert zipped_divide[0, 1](A, Layout(4, 2)) == make_layout(
+      [make_layout([A[0][0], zipped_divide(A[0][1], Layout(4, 2))]), A[1]])
+
+    # Post-conditions hold of the divided mode
+    R = zipped_divide[0](A, tiler)
+    assert rank(get[0](R)) == 2
+    assert compatible(tiler, get[0](R)[0])
+
+
   def test_logical_divide_types(self):
     # Behavior of logical_divide / zipped_divide across argument types
     # {None, int, tuple, Layout, Tiler, Tensor}.

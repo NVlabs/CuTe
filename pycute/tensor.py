@@ -41,7 +41,7 @@ class Tensor:
     self.accessor[offset] = value
 
   def get(self, mode=()) -> Tensor:
-    return Tensor(self.accessor, get(self.layout, mode))
+    return Tensor(self.accessor, get(self.layout, mode=mode))
 
   def __eq__(self, other) -> bool:
     return self.accessor == other.accessor and self.layout == other.layout

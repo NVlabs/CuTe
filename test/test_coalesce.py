@@ -56,6 +56,25 @@ class TestCoalesce:
     self.postcondition_coalesce(Layout(((2,2),(2,2)), ((1,4),(8,32))))
 
 
+  def test_coalesce_mode(self):
+    # `coalesce[mode](A)` coalesces that one mode of A and leaves the others
+    # alone -- it is `coalesce` with the profile lifted to `mode`.
+    A = Layout(((2, (1, 6)), (3, 4)), ((1, (6, 2)), (100, 300)))
+
+    assert coalesce[1](A) == make_layout([A[0], coalesce(A[1])])
+    assert coalesce[0](A) == make_layout([coalesce(A[0]), A[1]])
+    assert coalesce[1](A) == coalesce(A, (None, 1))
+    assert coalesce(A, mode=(1,)) == coalesce[1](A)
+    assert coalesce(A, mode=()) == coalesce(A)
+
+    # A mode is coalesced but the layout is otherwise preserved
+    R = coalesce[1](A)
+    assert depth(get[1](R)) <= 1
+    assert size(R) == size(A)
+    for i in range(size(A)):
+      assert R(i) == A(i)
+
+
   def test_coalesce_coord(self):
     self.postcondition_coalesce(Layout(1,E(0)))
     self.postcondition_coalesce(Layout(1,E(1)))
