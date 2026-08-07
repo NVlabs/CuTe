@@ -42,16 +42,22 @@ and then *lifted* to higher-rank layouts via two patterns:
    identity. This is a uniform way to skip a mode.
 
 In PyCuTe's code, you will see this pattern repeated for `coalesce`,
-`composition`, `complement`, `logical_divide`, and `logical_product`:
+`coalesce_z`, `composition`, `logical_divide`, and `logical_product`:
 
 ```python
-if profile is None:
-    return self
-if is_tuple(profile):
-    if rank(self) < len(profile): raise ValueError(...)
-    return make_layout(a._operation(p) for a, p in zip_longest(self, profile))
+if B is None:
+    return A
+if is_tuple(B):
+    if rank(A) < len(B): raise ValueError(...)
+    return make_layout(operation(a, b) for a, b in zip_longest(A, B))
 # ... 1-D base case below ...
 ```
+
+The core operations spell it as a `Layout` method, recursing through
+`a._operation(b)`; the derived `logical_divide` and `logical_product` spell it
+in their free function in [`algebra.py`](../pycute/algebra.py), which recurses
+through itself. `complement` does not follow the pattern: its second argument
+is an `extend` shape rather than a tiler.
 
 ## Coalesce
 
@@ -318,6 +324,15 @@ Layout(((5, 1), (4, 2, 1)), ((1@0, 25@0), (1@1, 8@1, 48@1)))
 > Formally:
 > `A ⊘ B = A ∘ (B, B*)` *(Whitepaper, §3.5.2)*.
 
+That formula is the implementation, not just the specification.
+`logical_divide` is a *derived* operation with no algorithm of its own — once
+the arguments are promoted, it is one line of `composition` against `B` and its
+complement:
+
+```python
+composition(A, make_layout([B, complement(B, extend=shape(A))]))
+```
+
 ```python
 >>> logical_divide(Layout(24), Layout(4, 2))
 Layout((4, (2, 3)), (2, (1, 8)))
@@ -413,6 +428,14 @@ assert c0 == c1
 
 The result is rank-2; mode-0 is `A`, mode-1 is `B` "with each element
 replaced by a unique copy of `A`".
+
+As with `logical_divide`, the formula is the implementation. `logical_product`
+is a *derived* operation with no algorithm of its own — once the arguments are
+promoted, it pairs `A` with its complement composed against `B`:
+
+```python
+make_layout([A, composition(complement(A), B)])
+```
 
 ```python
 >>> logical_product(Layout((2, 2), (4, 1)), Layout(6, 1))

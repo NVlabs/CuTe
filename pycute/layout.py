@@ -44,9 +44,9 @@ class Layout(LayoutBase):
   `prefix_product(shape)`; pass an explicit `stride` (or a single integer base)
   to override.
 
-  The layout algebra (composition, complement, inverses, divide, product, ...) is
-  exposed as free functions in `algebra.py`; the `_`-prefixed methods here are
-  their Layout implementations.
+  The layout algebra is exposed as free functions in `algebra.py`; the
+  `_`-prefixed methods here implement its core operations -- coalesce,
+  composition, complement, the inverses, nullspace.
 
   Examples:
     Layout((4, 8))               == Layout((4, 8), (1, 4))   # default compact column-major

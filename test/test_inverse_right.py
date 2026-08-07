@@ -162,9 +162,8 @@ class TestRightInverse:
     # A strided (non-surjective) symbolic layout has only the trivial inverse.
     assert right_inverse(Layout(N, X)) == Layout(1, 0)
 
-    # Symbolic strides that can't be ordered are deprioritized and ignored
-    # (this previously raised in the sort); a symbolic stride that continues
-    # the chain is still kept.
+    # Symbolic strides that can't be ordered are deprioritized past the sort and
+    # ignored; a symbolic stride that continues the chain is still kept.
     assert right_inverse(Layout((M, N), (DM, DN))) == Layout(1, 0)
     assert right_inverse(Layout((N, 4), (1, N))) == Layout((N, 4), (1, N))
 

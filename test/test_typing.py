@@ -9,6 +9,7 @@ import importlib
 import logging
 import typing
 
+import pytest
 import sympy
 
 from pycute import *
@@ -100,7 +101,7 @@ class TestTypeAliases:
 
     ``typedefs.py`` imports nothing from pycute, so membership in its namespace
     is proof of definition there (not an ``import *`` leak). ``__module__`` on
-    the ABCs confirms they were relocated out of ``stride.py`` / ``htuple.py``."""
+    the ABCs pins the module that defines them."""
     typedefs = importlib.import_module("pycute.typedefs")
     layout = importlib.import_module("pycute.layout")
     central = {"HTuple", "Profile", "IntTuple", "Shape", "Coord", "Stride",
@@ -111,13 +112,11 @@ class TestTypeAliases:
     assert Integer.__module__ == "pycute.typedefs"
     assert StrideScalar.__module__ == "pycute.typedefs"
 
-  def test_int_typing_renamed_to_typedefs(self):
-    """``int_typing.py`` was renamed to ``typedefs.py``."""
-    try:
+  def test_typedefs_is_the_only_alias_module(self):
+    """``typedefs.py`` is the sole home of the type aliases: there is no second
+    ``int_typing`` module for them to drift apart in."""
+    with pytest.raises(ModuleNotFoundError):
       importlib.import_module("pycute.int_typing")
-      assert False, "pycute.int_typing should no longer exist"
-    except ModuleNotFoundError:
-      pass
 
   def test_alias_leaf_types(self):
     """Each concrete HTuple specialization carries the Whitepaper leaf type."""

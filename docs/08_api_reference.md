@@ -542,10 +542,12 @@ Marker class for any layout. `is_layout(x)` checks `isinstance(x, LayoutBase)`.
 ### `class Layout(shape, stride=1)`
 
 A `Shape:Stride` pair. Calling `L(crd)` evaluates the layout. The class
-also exposes `__getitem__`, `get`, `__call__`, and the methods used by
-the dispatcher in `algebra.py` (`_coalesce`, `_coalesce_z`,
+also exposes `__getitem__`, `get`, `__call__`, and the core-operation
+methods used by the dispatcher in `algebra.py` (`_coalesce`, `_coalesce_z`,
 `_composition`, `_right_inverse`, `_left_inverse`, `_complement`,
-`_logical_divide`, `_logical_product`, `_nullspace`).
+`_nullspace`). `logical_divide` and `logical_product` are derived from
+`composition` and `complement` in [`algebra.py`](../pycute/algebra.py), so
+they have no method here.
 
 Test: [`test_layout.py::TestLayout::test_layout`](../test/test_layout.py).
 

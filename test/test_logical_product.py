@@ -81,30 +81,27 @@ class TestLogicalProduct:
 
   def test_logical_product_types(self):
     # Behavior of logical_product across argument types
-    # {None, int, tuple, Layout, Tiler, Tensor}. This encodes the CURRENT
-    # behavior; comments mark where it differs from commit 15df9e1.
+    # {None, int, tuple, Layout, Tiler, Tensor}.
     A = Layout((6,4),(4,1))
 
-    # -- A promoted from int / tuple / tiler: CHANGED. 15df9e1 raised TypeError
-    #    for any non-Layout A; A is now promoted via tiler_to_layout(A), making
-    #    logical_product symmetric with logical_divide. --
+    # -- A promoted from int / tuple / tiler
     assert logical_product(6,     Layout(2,1)) == logical_product(Layout(6,1),            Layout(2,1))
     assert logical_product((2,3), Layout(2,1)) == logical_product(tiler_to_layout((2,3)), Layout(2,1))
 
-    # -- A promoted to too-low rank for a multi-mode tiler B now reaches the
-    #    rank check (ValueError) rather than the old TypeError. --
+    # -- A of lower rank than a multi-mode tiler B: rank mismatch
     with pytest.raises(ValueError):
       logical_product(6, (Layout(2,1), Layout(2,1)))
 
-    # # -- A = None: unchanged (TypeError; tiler_to_layout(None) is undefined) --
+    # -- A = None: unsupported; unlike logical_divide there is no identity to
+    #    reproduce, and tiler_to_layout(None) is undefined
     with pytest.raises(TypeError):
       logical_product(None, Layout(2,1))
 
-    # -- A = Tensor: unchanged (TypeError; logical_product has no _layout_op hook) --
+    # -- A = Tensor: unsupported; logical_product has no Tensor hook
     with pytest.raises(TypeError):
       logical_product(make_tensor(Layout(6,1)), Layout(2,1))
 
-    # -- B promotions: None is a no-op; int promotes to N:1 (unchanged) --
+    # -- B promotions: None is a no-op; int promotes to N:1
     assert logical_product(A, None) == A
     assert logical_product(A, 2) == logical_product(A, Layout(2,1))
 
