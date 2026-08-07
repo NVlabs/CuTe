@@ -173,3 +173,91 @@ class TestLogicalDivide:
     # -- B = Tensor: nonsensical tiler
     with pytest.raises(TypeError):
       logical_divide(A, make_tensor(Layout(2,1)))
+
+
+  def test_logical_divide_arg_matrix(self):
+    # logical_divide over the full {None, int, tuple, Layout, tuple-of-Layouts}
+    # matrix of A and B. A tuple B is by-mode, so its rank must suit A; a tuple A
+    # is promoted to a single Layout over basis strides *before* B is applied,
+    # which is what makes the by-mode results carry E(0)/E(1).
+    cases = [
+      # A                             B                             expected
+      (None,                          None,                         TypeError),
+      (None,                          2,                            Layout((2, 1), (1, 2))),
+      (None,                          (2, 2),                       Layout(((2, 1), (2, 1)), ((E(0), 2*E(0)), (E(1), 2*E(1))))),
+      (None,                          Layout(2, 1),                 Layout((2, 1), (1, 2))),
+      (None,                          (Layout(2, 1), Layout(2, 2)),  Layout(((2, 1), (2, 2)), ((E(0), 2*E(0)), (2*E(1), E(1))))),
+
+      (24,                            None,                         Layout(24, 1)),
+      (24,                            2,                            Layout((2, 12), (1, 2))),
+      (24,                            (2, 2),                       ValueError),
+      (24,                            Layout(2, 1),                 Layout((2, 12), (1, 2))),
+      (24,                            (Layout(2, 1), Layout(2, 2)),  ValueError),
+
+      ((6, 4),                        None,                         Layout((6, 4), (E(0), E(1)))),
+      ((6, 4),                        2,                            Layout((2, (3, 4)), (E(0), (2*E(0), E(1))))),
+      ((6, 4),                        (2, 2),                       Layout(((2, 3), (2, 2)), ((E(0), 2*E(0)), (E(1), 2*E(1))))),
+      ((6, 4),                        Layout(2, 1),                 Layout((2, (3, 4)), (E(0), (2*E(0), E(1))))),
+      ((6, 4),                        (Layout(2, 1), Layout(2, 2)),  Layout(((2, 3), (2, 2)), ((E(0), 2*E(0)), (2*E(1), E(1))))),
+
+      (Layout((6, 4), (4, 1)),        None,                         Layout((6, 4), (4, 1))),
+      (Layout((6, 4), (4, 1)),        2,                            Layout((2, (3, 4)), (4, (8, 1)))),
+      (Layout((6, 4), (4, 1)),        (2, 2),                       Layout(((2, 3), (2, 2)), ((4, 8), (1, 2)))),
+      (Layout((6, 4), (4, 1)),        Layout(2, 1),                 Layout((2, (3, 4)), (4, (8, 1)))),
+      (Layout((6, 4), (4, 1)),        (Layout(2, 1), Layout(2, 2)),  Layout(((2, 3), (2, 2)), ((4, 8), (2, 1)))),
+
+      ((Layout(6, 2), Layout(4, 1)),  None,                         Layout((6, 4), (2*E(0), E(1)))),
+      ((Layout(6, 2), Layout(4, 1)),  2,                            Layout((2, (3, 4)), (2*E(0), (4*E(0), E(1))))),
+      ((Layout(6, 2), Layout(4, 1)),  (2, 2),                       Layout(((2, 3), (2, 2)), ((2*E(0), 4*E(0)), (E(1), 2*E(1))))),
+      ((Layout(6, 2), Layout(4, 1)),  Layout(2, 1),                 Layout((2, (3, 4)), (2*E(0), (4*E(0), E(1))))),
+      ((Layout(6, 2), Layout(4, 1)),  (Layout(2, 1), Layout(2, 2)),  Layout(((2, 3), (2, 2)), ((2*E(0), 4*E(0)), (2*E(1), E(1))))),
+    ]
+    for A, B, expected in cases:
+      if isinstance(expected, type):
+        with pytest.raises(expected):
+          logical_divide(A, B)
+      else:
+        assert logical_divide(A, B) == expected, f"logical_divide({A}, {B})"
+
+
+  def test_logical_divide_promotes_tiler_A(self):
+    # A non-Layout A is promoted with tiler_to_layout before any of B's by-mode
+    # structure is applied, so promoting it by hand must give the same result.
+    tilers = [6, 24, (6, 4), (2, 3, 4), (Layout(6, 2), Layout(4, 1)), (2, Layout(4, 1))]
+    Bs     = [None, 2, (2, 2), Layout(2, 1), (Layout(2, 1), Layout(2, 2)), (Layout(2, 1), None)]
+    for A in tilers:
+      for B in Bs:
+        if rank(A) < rank(B):
+          continue
+        assert logical_divide(A, B) == logical_divide(tiler_to_layout(A), B), \
+               f"logical_divide({A}, {B})"
+
+
+  def test_logical_divide_short_and_padded_tiler(self):
+    # A tuple B shorter than A leaves A's trailing modes untouched, and a None
+    # entry leaves its own mode untouched -- both spellings of "no tile here".
+    for A in [Layout((6, 4), (4, 1)), (6, 4), (Layout(6, 2), Layout(4, 1))]:
+      L = tiler_to_layout(A)
+      assert logical_divide(A, (Layout(2, 1),)) == make_layout([logical_divide(L[0], Layout(2, 1)), L[1]])
+      assert logical_divide(A, (Layout(2, 1), None)) == logical_divide(A, (Layout(2, 1),))
+      assert logical_divide(A, (None, Layout(2, 1))) == make_layout([L[0], logical_divide(L[1], Layout(2, 1))])
+      assert logical_divide(A, (None, None)) == L
+
+    # B may not out-rank A
+    with pytest.raises(ValueError):
+      logical_divide(Layout((6, 4), (4, 1)), (Layout(2, 1), Layout(2, 1), Layout(2, 1)))
+
+
+  def test_logical_divide_is_composition_with_complement(self):
+    # logical_divide is A o (B, B*): it must agree with that composition spelled
+    # out, for a single-Layout B on a Layout A.
+    cases = [
+      (Layout(24, 1),            Layout(4, 2)),
+      (Layout((6, 4), (4, 1)),   Layout(2, 1)),
+      (Layout((8, 8), (8, 1)),   Layout(32, 2)),
+      (Layout((6, 6), (1, 12)),  Layout((6, 3), (3, 1))),
+      (Layout((8, 8), (9, 1)),   Layout(4, E(1))),
+    ]
+    for A, B in cases:
+      assert logical_divide(A, B) == composition(A, make_layout([B, complement(B, extend=shape(A))])), \
+             f"logical_divide({A}, {B})"

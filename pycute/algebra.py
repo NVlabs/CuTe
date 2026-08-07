@@ -242,7 +242,9 @@ def logical_product(A, B: Tiler, *, mode=()):
 
   The rank-2 result places a copy of `A` (mode-0) at each position of `B`
   (mode-1), where mode-1 is `A`'s complement composed with `B`. A tuple `B`
-  applies by-mode and `B=None` is a no-op.
+  applies by-mode and `B=None` is a no-op. An integer or tuple `A` is promoted
+  via `tiler_to_layout` before `B` is applied, so a by-mode `B` sees the
+  promoted Layout's modes.
 
   A non-empty `mode` reproduces only that mode of `A` over `B` and leaves every
   other mode unchanged.
@@ -263,8 +265,20 @@ def logical_product(A, B: Tiler, *, mode=()):
   if hasattr(A, '_logical_product'):
     return A._logical_product(B)
   if is_int(A) or is_tuple(A):
-    return logical_product(tiler_to_layout(A), B)
-  raise TypeError(f"logical_product not supported for type {type(A)}")
+    A = tiler_to_layout(A)
+  if not is_layout(A):
+    raise TypeError(f"logical_product not supported for type {type(A)}")
+  # A is a Layout: a tuple B applies by-mode over A's modes
+  if B is None:
+    return A
+  if is_tuple(B):
+    if rank(A) < len(B): raise ValueError(f"Rank mismatch: logical_product({A}, {B})")
+    return make_layout(logical_product(a,b) for a,b in zip_longest(A,B))
+  if is_int(B):
+    B = Layout._set(B, 1)
+  if is_layout(B):
+    return make_layout([A, composition(complement(A), B)])
+  raise TypeError(f"logical_product not supported for tiler type {type(B)}")
 
 
 @ModeOpDecorator
@@ -274,7 +288,8 @@ def logical_divide(A, B: Tiler, *, mode=()):
 
   Mode-0 of the result is the elements selected by `B` (the *tile*); mode-1 is
   the layout of those tiles (the *grid*). A tuple `B` divides by-mode and
-  `B=None` is a no-op.
+  `B=None` is a no-op. An integer or tuple `A` is promoted via `tiler_to_layout`
+  before `B` is applied, so a by-mode `B` sees the promoted Layout's modes.
 
   A non-empty `mode` divides only that mode of `A` and leaves every other mode
   unchanged, so `logical_divide[0, 1](A, B)` is `A` with mode `(0, 1)` replaced
@@ -301,8 +316,20 @@ def logical_divide(A, B: Tiler, *, mode=()):
   if A is None:
     return logical_divide(tiler_to_layout(repeat_like(1, coprofile(tiler_to_layout(B)))), B)
   if is_int(A) or is_tuple(A):
-    return logical_divide(tiler_to_layout(A), B)
-  raise TypeError(f"logical_divide not supported for type {type(A)}")
+    A = tiler_to_layout(A)
+  if not is_layout(A):
+    raise TypeError(f"logical_divide not supported for type {type(A)}")
+  # A is a Layout: a tuple B applies by-mode over A's modes
+  if B is None:
+    return A
+  if is_tuple(B):
+    if rank(A) < len(B): raise ValueError(f"Rank mismatch: logical_divide({A}, {B})")
+    return make_layout(logical_divide(a,b) for a,b in zip_longest(A,B))
+  if is_int(B):
+    B = Layout._set(B, 1)
+  if is_layout(B):
+    return composition(A, make_layout([B, complement(B, extend=shape(A))]))
+  raise TypeError(f"logical_divide not supported for tiler type {type(B)}")
 
 
 @ModeOpDecorator
@@ -381,7 +408,7 @@ def raked_product(A, B: Tiler):
   return make_layout(make_layout([x,y]) for x,y in zip(result[1], result[0]))
 
 
-def nullspace(A):
+def nullspace(A) -> Layout:
   """
   Nullspace of a Layout: the layout of coordinates that `A` maps to 0.
 
@@ -402,7 +429,7 @@ def nullspace(A):
   if A is None:
     return None
   if is_int(A) or is_tuple(A):
-    return nullspace(tiler_to_layout(A))
+    return Layout._set(1, 0)
   raise TypeError(f"nullspace not supported for type {type(A)}")
 
 

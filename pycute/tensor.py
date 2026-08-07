@@ -12,6 +12,7 @@ import ctypes
 from .shape import *
 from .layout import *
 from .accessor import *
+from .algebra import *
 
 class Tensor:
   __slots__ = ("accessor", "layout")
@@ -51,28 +52,28 @@ class Tensor:
     Coalesce the tensor's layout according to the profile.
     Returns a new Tensor with the coalesced layout.
     """
-    return Tensor(self.accessor, self.layout._coalesce(profile))
+    return Tensor(self.accessor, coalesce(self.layout, profile))
 
   def _coalesce_z(self, profile=1) -> Tensor:
     """
     Coalesce the tensor's layout according to the profile.
     Returns a new Tensor with the coalesced layout.
     """
-    return Tensor(self.accessor, self.layout._coalesce_z(profile))
+    return Tensor(self.accessor, coalesce_z(self.layout, profile))
 
   def _composition(self, B) -> Tensor:
     """
     Group composition of Tensor with B to produce a Tensor.
     Returns a new Tensor with the composed layout.
     """
-    return Tensor(self.accessor, self.layout._composition(B))
+    return Tensor(self.accessor, composition(self.layout, B))
 
   def _logical_divide(self, B) -> Tensor:
     """
     Logical divide of Tensor with B to produce a Tensor.
     Returns a new Tensor split according to B.
     """
-    return Tensor(self.accessor, self.layout._logical_divide(B))
+    return Tensor(self.accessor, logical_divide(self.layout, B))
 
   # print and str
   def __str__(self) -> str:

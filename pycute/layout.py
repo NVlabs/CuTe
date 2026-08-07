@@ -30,14 +30,14 @@ def is_layout(x):
 
 class Layout(LayoutBase):
   """
-  A CuTe Layout: a map from a coordinate domain to a codomain, 
+  A CuTe Layout: a map from a coordinate domain to a codomain,
   defined by a `shape` and a `stride`.
 
   The  `shape` is an HTuple of Integers.
   The `stride` is an HTuple of stride scalars and is congruent with `shape`.
 
   A Layout evaluates as `L(c) == inner_product(idx2crd(c, shape), stride)`,
-  mapping any coordinate of `shape` -- integral, flat, natural -- to a 
+  mapping any coordinate of `shape` -- integral, flat, natural -- to a
   codomain value.
 
   The default constructor fills in a compact, column-major stride via
@@ -256,7 +256,7 @@ class Layout(LayoutBase):
     # can be ordered, so a symbolic stride is filtered past the sort.
     def _stride_key(dsp):
       return (0, dsp[0]) if is_static(dsp[0]) else (1, 0)
-      
+
     chain = sorted(zip(flat_d, flat_s, prefix_product(flat_s)), key=_stride_key)
 
     def invert_axis(e):
@@ -378,20 +378,6 @@ class Layout(LayoutBase):
 
     return result
 
-  def _logical_divide(self, B: Tiler) -> Layout:
-    """
-    Split this Layout into the elements of `B` (the Tile) and a Grid over those
-    Tiles; tuples-of-Layouts apply by-mode and `None` is a no-op.
-    """
-    if B is None:
-      return self
-    if is_int(B):
-      B = Layout._set(B, 1)
-    if is_tuple(B):
-      if rank(self) < len(B): raise ValueError(f"Rank mismatch: logical_divide({self}, {B})")
-      return make_layout(a._logical_divide(b) for a,b in zip_longest(self,B))
-    from .algebra import complement
-    return self._composition(make_layout([B, complement(B, extend=self.shape)]))
 
   def _nullspace(self) -> Layout:
     """
@@ -406,20 +392,6 @@ class Layout(LayoutBase):
     return Layout._set(unwrap(tuple(fshape[i] for i in iseq)),
                        unwrap(tuple(pshape[i] for i in iseq)))
 
-
-  def _logical_product(self, B: Tiler) -> Layout:
-    """
-    Reproduce this Layout over `B`.
-    """
-    if B is None:
-      return self
-    if is_int(B):
-      B = Layout._set(B, 1)
-    if is_tuple(B):
-      if rank(self) < len(B): raise ValueError(f"Rank mismatch: logical_product({self}, {B})")
-      return make_layout(a._logical_product(b) for a,b in zip_longest(self,B))
-
-    return make_layout([self, self._complement()._composition(B)]);
 
   def __str__(self) -> str:
     """Compact `shape:stride` form, e.g. `(4, 8):(1, 4)`."""
