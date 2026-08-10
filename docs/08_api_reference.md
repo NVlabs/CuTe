@@ -166,6 +166,22 @@ Extract leaves of `B` corresponding to `None`/non-`None` leaves of
 Internal leaf iterators used by `inner_product` and related helpers. Exported
 for advanced callers mirroring the C++ CuTe utilities.
 
+### `profile(obj)`
+
+A `Layout` or `Tensor` profiles as its shape,
+and every other object already *is* its own profile, since congruence reads a
+tuple's tree and ignores its leaves. Test:
+[`test_htuple.py::TestHTuple::test_profile`](../test/test_htuple.py).
+
+```python
+>>> profile(((2, 3), 4)), profile(42)
+(((2, 3), 4), 42)
+>>> profile(Layout((2, (3, 4)))), profile((F2(1), F2(2)))
+((2, (3, 4)), (F1, F2))
+>>> profile((Layout(2), Layout(3)))
+(Layout(2, 1), Layout(3, 1))
+```
+
 ### `congruent(a, b)` / `weakly_congruent(a, b)`
 
 Profile relations on any `HTuple`. Tests:

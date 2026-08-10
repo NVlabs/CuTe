@@ -14,10 +14,14 @@ einsum's folding against the contraction's definition with no numpy dependency.
 
 import ctypes
 import itertools
+import logging
+
 import pytest
 
 from pycute import *
 from examples.einsum import einsum, _fold
+
+logger = logging.getLogger()
 
 
 def _make(mode, extents, stride=None, value=lambda i: 0.0):
@@ -56,9 +60,7 @@ class TestEinsum:
     B = _make(b_mode, extents, b_stride, value=lambda i: 2 * i + 3)
     C = _make(c_mode, extents, c_stride, value=lambda i: c_init)
 
-    print(A)
-    print(B)
-    print(C)
+    logger.info(f"\n{subscripts}:\n    {A}\n  * {B}\n -> {C}")
 
     assert einsum(subscripts, A, B, C) is C   # in-place, returns C
 

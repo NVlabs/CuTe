@@ -197,7 +197,7 @@ See [`docs/07_visualization.md`](docs/07_visualization.md) for every drawer, the
 ```
 pycute/
 ├── docs/       # documentation (start at docs/index.md); figures in docs/images/
-├── examples/   # standalone scripts (einsum, TV-layout, README figures)
+├── examples/   # standalone scripts and notebooks
 ├── test/       # pytest unit tests (one test_*.py per operation)
 └── pycute/     # the importable package
     └── util/   # optional printing and visualization helpers

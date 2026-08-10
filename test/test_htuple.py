@@ -34,6 +34,32 @@ class TestHTuple:
     assert unwrap((((42,)),)) == 42
     assert unwrap((1, 2)) == (1, 2)     # not a 1-tuple
 
+  def test_profile(self):
+    # For anything with a shape, the profile is that shape
+    for obj in [42, (2, 3), ((2, 3), 4), Layout(((2, 3), 4)),
+                make_tensor(Layout(((2, 3), 4)))]:
+      assert profile(obj) == shape(obj)
+
+    # Every HTuple is already its own profile, list containers included
+    for obj in [42, (2, 3), [2, [3, 4]], ("m", None)]:
+      assert profile(obj) is obj
+
+    # Only the object itself is asked for a shape, so a Tiler's Layouts are leaves
+    assert profile((Layout(2), Layout((3, 4)))) == (Layout(2), Layout((3, 4)))
+    assert congruent(profile((Layout(2), Layout((3, 4)))), (0, 0))
+
+    # Unlike `shape`, no leaf is descended into and no input is rejected
+    assert profile((F2(1), F2(2))) == (F2(1), F2(2))
+    assert profile((E(0), (E(1), None))) == (E(0), (E(1), None))
+    assert profile(("m", "n")) == ("m", "n")
+    assert profile(4.5) == 4.5
+    with pytest.raises(TypeError):
+      shape((F2(1), F2(2)))
+
+    # Congruence only looks at the tree, so profiles compare like their sources
+    assert congruent(profile(Layout(((2, 3), 4))), profile((("m", "n"), None)))
+    assert profile(profile(Layout(((2, 3), 4)))) == profile(Layout(((2, 3), 4)))
+
   def test_product(self):
     assert product(2) == 2
     assert product((3,2)) == 6

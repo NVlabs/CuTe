@@ -22,6 +22,43 @@ The script writes SVGs to [`docs/images/`](../docs/images/) regardless of the
 current working directory. See
 [Visualization](../docs/07_visualization.md) for the drawing APIs.
 
+## `einfold.py`
+
+Rearranges modes by naming them: `einfold("in_modes->out_modes", value)` is a
+generalized transpose that permutes, groups, ungroups, repeats and drops the
+modes of a `Layout`, a `Tensor` or an `HTuple`. Each side of the expression
+denotes a profile whose leaves are one-character names — as in `einsum`'s
+subscripts, separators between modes are implied — so a group descends into a
+nested source mode on the left and builds a new one on the right. Top-level
+modes the input leaves unnamed are appended unchanged, so an expression only
+names the modes it rearranges.
+
+`Layout`s produce `Layout`s and `Tensor`s produce `Tensor`s over the source's
+accessor, so no data is copied. Anything else is matched against its
+[`profile`](../docs/01_htuple.md#profiles-congruence-and-weak-congruence) and
+rebuilt as tuples, which asks nothing of its leaves — so a Shape or a Stride
+folds exactly as the Layout it was read from.
+
+```python
+from pycute import Layout, make_tensor, shape
+from examples.einfold import einfold
+
+A = make_tensor(Layout(((12, 4), 42, 5, 7)))
+shape(einfold("ijkm -> imkj", A))        # ((12, 4), 7, 5, 42)  -- permute
+shape(einfold("(ab)cde -> c(ade)b", A))  # (42, (12, 5, 7), 4)  -- split and regroup
+shape(einfold("ij -> (ij)", A))          # (((12, 4), 42), 5, 7)  -- 5, 7 pass through
+shape(einfold("ijk -> ik", A))           # ((12, 4), 5, 7)  -- drop mode j
+
+einfold("ijkm -> imkj", shape(A))        # folds the Shape on its own
+```
+
+The companion `einfold_test.py` is one series of such examples, each checked as
+a Layout, as a Tensor and as the source's Shape and Stride:
+
+```sh
+pytest examples/einfold_test.py
+```
+
 ## `einsum.py`
 
 Implements a minimal binary `einsum` by folding a tensor contraction into the

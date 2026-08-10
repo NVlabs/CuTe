@@ -18,6 +18,31 @@ def is_tuple(x) -> bool:
   return isinstance(x, (tuple, list))
 
 
+def profile(obj) -> Profile:
+  """
+  Get an object's *profile*: its HTuple tree with the leaves left as they are.
+
+  An object carrying a CuTe shape -- a `Layout`, a `Tensor` -- profiles as that 
+  shape; every other object already *is* its own profile, because `congruent` and
+  `weakly_congruent` read a tuple's tree and ignore whatever sits at its leaves.
+
+  Notable consequences:
+    -- `profile(obj) == shape(obj)` for a `Layout` or a `Tensor`.
+    -- `profile(obj) is obj` for every other `HTuple`: it is already a profile.
+    -- `profile` is idempotent and total: it accepts any object and rejects none.
+
+  Examples:
+    profile((2, (3, 4)))            == (2, (3, 4))
+    profile(42)                     == 42
+    profile(Layout((2, (3, 4))))    == (2, (3, 4))
+    profile((F2(1), F2(2)))         == (F2(1), F2(2))    # a Stride has no shape
+    profile((Layout(2), Layout(3))) == (Layout(2), Layout(3))    # a Tiler's leaves
+  """
+  if hasattr(obj, 'shape'):
+    return profile(obj.shape() if callable(obj.shape) else obj.shape)
+  return obj
+
+
 def congruent(a: Profile, b: Profile) -> bool:
   """
   Test whether `a` and `b` have the same hierarchical profile (Whitepaper, §2.1).

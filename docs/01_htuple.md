@@ -77,8 +77,19 @@ leaf of `P` corresponds to either a leaf or a deeper sub-tree in `S`.
 * `30 ≲ (a, b) ≲ (v, (0, α))`
 * `30 ≲ (a, b, c) ≲ ((0, 0), 0, 0)`
 
+`profile(obj)` reads that tree off any object.
+A `Layout` profiles as its shape and every other `HTuple` is already its own
+profile.
+
+```python
+>>> profile(Layout((2, (3, 4)))), profile((F2(1), F2(2)))
+((2, (3, 4)), (F1, F2))
+>>> congruent(profile(Layout((2, (3, 4)))), profile((7, ("m", None))))
+True
+```
+
 PyCuTe's tests for these relations live in
-[`htuple.py`](../pycute/htuple.py) (`congruent`, `weakly_congruent`).
+[`htuple.py`](../pycute/htuple.py) (`profile`, `congruent`, `weakly_congruent`).
 See
 [`test_compatibility.py`](../test/test_compatibility.py) for
 worked examples.
