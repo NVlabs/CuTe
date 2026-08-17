@@ -271,10 +271,13 @@ def coordinates(shape: Shape):
   """
   if is_int(shape):
     yield from range(shape)
+    return
   if is_tuple(shape):
     if len(shape) == 0:
       yield ()
+      return
     for rest in coordinates(shape[1:]):
       for c in coordinates(shape[0]):
         yield (c,) + rest
+    return
   raise TypeError(f"coordinates({shape})")
