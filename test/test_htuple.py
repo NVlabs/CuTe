@@ -81,6 +81,12 @@ class TestHTuple:
       assert idx != idx2crd(idx,shape)
       assert idx == crd2idx(idx2crd(idx,shape),shape)
 
+  def test_coordinates(self) -> None:
+    assert list(coordinates(6)) == [0, 1, 2, 3, 4, 5]
+    assert list(coordinates((3, 2))) == [(0,0), (1,0), (2,0), (0,1), (1,1), (2,1)]
+    assert list(coordinates((2, (2, 2)))) == [(0,(0,0)), (1,(0,0)), (0,(1,0)), (1,(1,0)),
+                                       (0,(0,1)), (1,(0,1)), (0,(1,1)), (1,(1,1))]
+
   def test_slice_dice(self):
     shape = ((2, 3), (5, 7, 9))
 
