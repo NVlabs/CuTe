@@ -2,23 +2,22 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """
-Coloring functors shared by the CuTe Layout visualizers (draw_svg / draw_latex).
+Coloring functors shared by the CuTe Layout visualizers (draw_svg / draw_latex)
 
-A `color` functor maps a cell key to an ``(r, g, b)`` tuple with each component
-in ``[0, 255]``. Two key shapes are used by the drawers:
+A `color` functor maps a cell key to an `(r, g, b)` tuple with each component in
+`[0, 255]`. The drawers use two key shapes, and this module holds a catalog of
+each:
 
-* offset functors take a single integer offset: ``color(idx) -> (r, g, b)``
-* thread-value functors take a ``(tid, vid)`` pair: ``color(tid, vid) -> (r, g, b)``
+  -- offset functors take one integer offset, `color(idx) -> (r, g, b)`:
+     `index_grey_8x`, `bank_color_8x`, `bank_color_16x`, `bank_color_32x`
+  -- thread-value functors take a `(tid, vid)` pair,
+     `color(tid, vid) -> (r, g, b)`: `thread_color_8x`, `value_color_8x`,
+     `warp_color_8x`
+  -- `white` and `constant(rgb)` ignore their key, so they serve either shape
 
-This module provides a small catalog of common colorings:
-
-* offset:        ``index_grey_8x`` (default), ``bank_color_8x/16x/32x``
-* thread-value:  ``thread_color_8x`` (default), ``value_color_8x``, ``warp_color_8x``
-* constant:      ``white``, and ``constant(rgb)`` to build your own
-
-``index_grey_8x``/``thread_color_8x`` are the defaults used by
-``draw_svg``/``draw_latex`` and ``draw_svg_tv``/``draw_latex_tv`` respectively;
-pass any functor of the matching signature to override them.
+`white` is the default of `draw_svg` / `draw_latex` and `thread_color_8x` that of
+`draw_svg_tv` / `draw_latex_tv`; pass any functor of the matching signature to
+override them.
 """
 
 __all__ = [
@@ -56,29 +55,32 @@ _spectrum_8  = _spectrum_32[::4]   #  8 evenly-spaced colors
 # ---- Offset colorings: color(idx) -> (r, g, b) ----
 
 def index_grey_8x(idx):
-  """Greyscale shade by ``idx % 8`` -> ``(r, g, b)``; default offset coloring."""
+  """Greyscale shade by `idx % 8` -> `(r, g, b)`; default offset coloring."""
   return _greyscale_colors[int(idx) % len(_greyscale_colors)]
 
 
 def bank_color_8x(idx):
-  """Color by ``idx % 8`` -> ``(r, g, b)`` from the light spectrum.
+  """
+  Color by `idx % 8` -> `(r, g, b)` from the light spectrum.
 
-  Like ``bank_color_32x`` but cycling every 8 -- handy for 8-bank groupings
+  Like `bank_color_32x` but cycling every 8 -- handy for 8-bank groupings
   or when fewer, more distinct colors read better.
   """
   return _spectrum_8[int(idx) % len(_spectrum_8)]
 
 
 def bank_color_16x(idx):
-  """Color by ``idx % 16`` -> ``(r, g, b)`` from the light spectrum.
+  """
+  Color by `idx % 16` -> `(r, g, b)` from the light spectrum.
 
-  Like ``bank_color_32x`` but cycling every 16.
+  Like `bank_color_32x` but cycling every 16.
   """
   return _spectrum_16[int(idx) % len(_spectrum_16)]
 
 
 def bank_color_32x(idx):
-  """Color by shared-memory bank ``idx % 32`` -> ``(r, g, b)``.
+  """
+  Color by shared-memory bank `idx % 32` -> `(r, g, b)`.
 
   Spreads the 32 banks around a light spectrum so equal-bank cells share a
   color -- handy for spotting shared-memory bank conflicts.
@@ -89,27 +91,27 @@ def bank_color_32x(idx):
 # ---- Thread-value colorings: color(tid, vid) -> (r, g, b) ----
 
 def thread_color_8x(tid, vid):
-  """Color by ``tid % 8`` -> ``(r, g, b)`` (``vid`` ignored); default TV coloring."""
+  """Color by `tid % 8` -> `(r, g, b)` (`vid` ignored); default TV coloring."""
   return _tv_colors[int(tid) % len(_tv_colors)]
 
 
 def value_color_8x(tid, vid):
-  """Color by value index ``vid % 8`` -> ``(r, g, b)`` (``tid`` ignored)."""
+  """Color by value index `vid % 8` -> `(r, g, b)` (`tid` ignored)."""
   return _tv_colors[int(vid) % len(_tv_colors)]
 
 
 def warp_color_8x(tid, vid):
-  """Color by warp ``(tid // 32) % 8`` -> ``(r, g, b)`` (32 threads per warp)."""
+  """Color by warp `(tid // 32) % 8` -> `(r, g, b)` (32 threads per warp)."""
   return _tv_colors[(int(tid) // 32) % len(_tv_colors)]
 
 
 # ---- Constant / generic ----
 
 def constant(rgb):
-  """Return a coloring functor that ignores its key and always yields ``rgb``."""
+  """Return a coloring functor that ignores its key and always yields `rgb`."""
   return lambda *args: rgb
 
 
 def white(*args):
-  """Constant white ``(255, 255, 255)``; valid for either functor signature."""
+  """Constant white `(255, 255, 255)`; valid for either functor signature."""
   return (255, 255, 255)

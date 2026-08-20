@@ -1,3 +1,41 @@
+#### Documentation
+
+The code is the documentation. `docs/08_api_reference.md` is **generated** from
+the docstrings in `pycute/`, so document a name where it is defined and let the
+test suite rewrite the reference -- it regenerates a stale one and warns that it
+did, leaving you to commit the result. To regenerate it by hand, or to check it
+the way CI does:
+
+```bash
+$ python scripts/gen_api_reference.py           # rewrite the reference
+$ python scripts/gen_api_reference.py --check   # what CI runs
+```
+
+A docstring is a one-line summary, then any prose that says something the
+conditions and examples cannot, then the sections that carry the contract:
+
+```python
+def coalesce(A, profile=1, *, mode=()):
+  """
+  Coalesce a Layout or Tensor into a simpler, equivalent form.
+
+  Pre-conditions:
+    conditions the caller must meet
+  Post-conditions:
+    size(result) == size(A)
+  Examples:
+    coalesce(Layout((2, (1, 6)), (1, (6, 2))))  == Layout(12, 1)
+    coalesce(bad)                               -> ValueError
+  """
+```
+
+Prefer conditions and examples to prose: they say the same thing more precisely,
+and unlike prose they are checked. `test/test_docstring_examples.py` evaluates
+every line under an `Examples:` heading -- `==` as an assertion, `->` as an
+expected exception, anything else as a setup statement sharing a namespace with
+the lines that follow. Write a schematic illustration with `:=` and keep it in
+prose, where it will not be evaluated.
+
 #### Signing Off Your Work
 * We require that all contributors "sign-off" on their commits. This certifies that the contribution is your original work, or you have rights to submit it under the same license, or a compatible license.
   * Any contribution which contains commits that are not Signed-Off will not be accepted.

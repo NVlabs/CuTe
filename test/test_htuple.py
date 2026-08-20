@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """
-Unit tests for pycute.htuple
+Unit tests for pycute.htuple, and for pycute.stride's leaf arithmetic
 
 These tests are also worked examples for docs/01_htuple.md.
 """

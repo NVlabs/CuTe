@@ -3,6 +3,14 @@
 
 """
 Functions for CuTe Shapes
+
+A `Shape` is an `IntTuple` of positive extents describing a layout's domain
+(Whitepaper, §2.2). Its leaves and its tree together fix a coordinate space,
+and this module holds the operations on that space: reading its structure
+(`shape`, `size`, `rank`, `depth`), the *compatibility* partial order relating
+one shape's coordinates to another's (`compatible`, `common_refinement`,
+`common_coarsening`), and the maps between a coordinate's forms (`idx2crd`,
+`crd2idx`, `coordinates`).
 """
 
 from functools import reduce
@@ -15,11 +23,20 @@ from .stride import *
 
 @ModeOpDecorator
 def shape(obj, *, mode=()) -> Shape:
-  """Get an object's shape"""
+  """
+  Get an object's shape.
+
+  Examples:
+    shape(Layout((4, 8), (1, 4)))     == (4, 8)
+    shape((3, (2, 4)))                == (3, (2, 4))
+    shape(42)                         == 42
+    shape[1](Layout((3, (2, 4))))     == (2, 4)
+    shape[1, 0](Layout((3, (2, 4))))  == 2
+  """
   if hasattr(obj, 'shape'):       # Use .shape() or .shape if available (Layouts/Tensors/Other)
     return get(obj.shape() if callable(getattr(obj, 'shape')) else obj.shape, mode=mode)
   if mode != ():                  # Not a Layout or Tensor, so slice once and recurse
-    return shape(obj[mode[0]], mode=mode[1:])
+    return shape(get(obj, mode=mode))
   if is_int(obj) or obj is None:
     return obj
   try:
@@ -30,20 +47,50 @@ def shape(obj, *, mode=()) -> Shape:
 
 @ModeOpDecorator
 def size(obj, *, mode=()) -> Integer:
-  """Get an object's size"""
+  """
+  Get an object's size: the number of integral coordinates in its domain.
+
+  Post-conditions:
+    size(obj) == product(shape(obj))
+
+  Examples:
+    size(Layout((4, 8), (1, 4)))   == 32
+    size((3, (2, 4)))              == 24
+    size(42)                       == 42
+    size[1](Layout((3, (2, 4))))   == 8
+    size(())                       == 1
+  """
   return product(shape(obj, mode=mode))
 
 
 @ModeOpDecorator
 def rank(obj, *, mode=()) -> int:
-  """Get an object's rank"""
+  """
+  Get an object's rank: the number of top-level modes of its shape.
+
+  Examples:
+    rank(Layout((4, 8), (1, 4)))  == 2
+    rank((3, (2, 4), 5))          == 3
+    rank(42)                      == 1
+    rank(())                      == 0
+    rank[1](Layout((3, (2, 4))))  == 2
+  """
   s = shape(obj, mode=mode)
   return len(s) if is_tuple(s) else 1
 
 
 @ModeOpDecorator
 def depth(obj, *, mode=()) -> int:
-  """Get an object's depth"""
+  """
+  Get an object's depth: how deeply its shape nests.
+
+  Examples:
+    depth(42)                        == 0
+    depth((3, 4))                    == 1
+    depth((3, (2, 4)))               == 2
+    depth(Layout((3, (2, (4, 5)))))  == 3
+    depth[1](Layout((3, (2, 4))))    == 1
+  """
   s = shape(obj, mode=mode)
   return 1 + reduce(max, map(depth, s), 0) if is_tuple(s) else 0
 
@@ -52,18 +99,16 @@ def compatible(a: Shape, b: Shape) -> bool:
   """
   Test whether `a` *coarsens* `b`.
 
-  *Compatibility*, `a ≼ b`, is a partial order on shapes. It strengthens weak
-  congruence by additionally requiring sizes to agree. 
-  Equivalently, every coordinate of `a` (in `Z(a)`) is also a coordinate 
-  of `b` (in `Z(b)`), so `Z(a) ⊆ Z(b)`.
+  *Compatibility*, `a ≼ b`, is a partial order on shapes: weak congruence that
+  additionally requires sizes to agree, so every coordinate of `a` is also a
+  coordinate of `b`, i.e. `Z(a) ⊆ Z(b)`. We say `a` *coarsens* `b`, and `b`
+  *refines* `a`.
 
-  We say `a ≼ b`, and `a` *coarsens* `b`, and `b` *refines* `a`.
+  Accepts any object that has a CuTe shape (e.g. `Layout`, `Tensor`).
 
   Notable consequences:
     -- `a ≼ b`  implies  `a ≲ b`  (compatibility implies weak congruence).
     -- The least element below any shape `b` is the integer `size(b)`.
-
-  Accepts any object that has a CuTe shape (e.g. `Layout`, `Tensor`) via `shape(...)`.
 
   Examples:
     compatible(30, (2, 15))                   == True     # 30 ≼ (2, 15)
@@ -187,7 +232,7 @@ def idx2crd(idx: Coord, shape: Shape) -> Coord:
   Map any coordinate to a *natural* coordinate of `shape`.
 
   Input is decomposed in *colexicographical* order (leftmost mode varies fastest).
-  The final mode keeps the full quotient (its `mod` is skipped), so an 
+  The final mode keeps the full quotient (its `mod` is skipped), so an
   out-of-bounds `idx` does not wrap -- the excess accumulates in the last leaf.
 
   A scalar `idx` may also be a non-`Integer` stride scalar that supplies an
@@ -195,12 +240,12 @@ def idx2crd(idx: Coord, shape: Shape) -> Coord:
   drawn from a layout's codomain be fed back in as a coordinate.
 
   Pre-conditions:
-  -- weakly_congruent(idx, shape)
+    weakly_congruent(idx, shape)
 
   Post-conditions:
-  -- congruent(result, shape)
-  -- Right-inverse of `crd2idx` on in-bounds inputs:
-       crd2idx(idx2crd(i, S), S) == i for i in range(size(S))
+    congruent(result, shape)
+    right-inverse of `crd2idx` on in-bounds inputs:
+      crd2idx(idx2crd(i, S), S) == i   for i in range(size(S))
 
   Examples:
     idx2crd(7,    14)          == 7
@@ -238,13 +283,13 @@ def crd2idx(crd: Coord, shape: Shape) -> Integer:
   Input is recomposed in *colexicographical* order (leftmost mode varies fastest).
 
   Pre-conditions:
-  -- weakly_congruent(crd, shape)
+    weakly_congruent(crd, shape)
 
   Post-conditions:
-  -- congruent(result, 0)
-  -- Inverse of `idx2crd` on in-bounds inputs:
-       idx2crd(crd2idx(c, S), S) == c for c in coordinates(S)
-       crd2idx(idx2crd(i, S), S) == i for i in range(size(S))
+    congruent(result, 0)
+    inverse of `idx2crd` on in-bounds inputs:
+      idx2crd(crd2idx(c, S), S) == c   for c in coordinates(S)
+      crd2idx(idx2crd(i, S), S) == i   for i in range(size(S))
 
   Examples:
     crd2idx((1, 0, 1),   (3, 2, 4))   == 7

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """
-Utilities for printing CuTe Layouts
+Utilities for printing CuTe Layouts as bordered grids
 """
 
 from typing import Union
@@ -10,6 +10,16 @@ from typing import Union
 from pycute import *
 
 def print_table(tensor : Union[Tensor, LayoutBase], print_type=True):
+  """
+  Render a rank-2 layout or tensor as a single bordered grid, one cell per
+  coordinate.
+
+  Like `print_tensor`, a `Layout` is rendered through an `ImplicitAccessor` and
+  a `Tensor` shows its elements, with `print_type` prepending the
+  `Shape:Stride` header. A non-rank-2 input falls back to a plain `print`.
+
+  Requires the optional `tabulate` package (`pip install pycute[viz]`).
+  """
   if (print_type):
     print(tensor)
 

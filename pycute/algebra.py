@@ -107,7 +107,7 @@ def composition(A, B: Tiler, *, mode=()):
     composition(Layout(20, 2), Layout((5, 4), (4, 1)))          == Layout((5, 4), (8, 2))
     composition(Layout(12), Layout((4, 3)))                     == Layout((4, 3), (1, 4))
     composition[1](Layout((4, 6), (1, 4)), Layout(3, 2))        == Layout((4, 3), (1, 8))
-    composition(None, (4, 3))                                   == Layout((4, 3), (1@0, 1@1))
+    composition(None, (4, 3))                                   == Layout((4, 3), (E(0), E(1)))
   """
   if A is None:
     if B is None:
@@ -259,7 +259,7 @@ def logical_product(A, B: Tiler, *, mode=()):
 
   Post-conditions:
     rank(get[mode](result)) == 2  when is_layout(B)
-    size(result) == size(A) * size(B)
+    size(result) == size(A) * size(B)  when is_layout(B)
     get[mode](result)[0] == get[mode](A)
     compatible(B, get[mode](result)[1])
 

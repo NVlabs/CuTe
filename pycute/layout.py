@@ -21,36 +21,47 @@ from .shape import *
 
 
 class LayoutBase:
+  """
+  Marker base class for every layout.
+
+  Subclassing it is what makes `is_layout` true, which lets the algebra and the
+  visualizers recognize a layout without importing `Layout` itself.
+  """
   pass
 
 
 def is_layout(x):
+  """
+  True iff `x` is a layout, i.e. any `LayoutBase`.
+
+  Examples:
+    is_layout(Layout((4, 8)))  == True
+    is_layout((4, 8))          == False
+    is_layout(42)              == False
+  """
   return isinstance(x, LayoutBase)
 
 
 class Layout(LayoutBase):
   """
-  A CuTe Layout: a map from a coordinate domain to a codomain,
-  defined by a `shape` and a `stride`.
+  A CuTe Layout: a map from a coordinate domain to a codomain, defined by a
+  `shape` (an HTuple of Integers) and a congruent `stride` (an HTuple of stride
+  scalars).
 
-  The  `shape` is an HTuple of Integers.
-  The `stride` is an HTuple of stride scalars and is congruent with `shape`.
+  Evaluates as `L(c) == inner_product(idx2crd(c, shape), stride)`, so every
+  coordinate form -- integral, flat, natural -- reaches the same value. The
+  default `stride` is the compact column-major `prefix_product(shape)`; pass one
+  explicitly, or as a single integer base, to override it.
 
-  A Layout evaluates as `L(c) == inner_product(idx2crd(c, shape), stride)`,
-  mapping any coordinate of `shape` -- integral, flat, natural -- to a
-  codomain value.
-
-  The default constructor fills in a compact, column-major stride via
-  `prefix_product(shape)`; pass an explicit `stride` (or a single integer base)
-  to override.
-
-  The layout algebra is exposed as free functions in `algebra.py`; the
-  `_`-prefixed methods here implement its core operations -- coalesce,
-  composition, complement, the inverses, nullspace.
+  The algebra is exposed as free functions in `algebra.py`; the `_`-prefixed
+  methods here implement its core operations.
 
   Examples:
     Layout((4, 8))               == Layout((4, 8), (1, 4))   # default compact column-major
     Layout((4, 8), (8, 1))(2, 3) == 19                       # evaluate a coordinate
+    A = Layout((3, (2, 4)), (2, (1, 6)))
+    A(17) == A(2, 5) == A(2, (1, 2)) == 17                    # the three coordinate forms
+    A[1][0] == Layout(2, 1)                                  # index into the modes
   """
   __slots__ = ("shape", "stride")
 
@@ -408,7 +419,7 @@ def make_layout(layouts: Iterable[Layout]) -> Layout:
 
   Post-conditions:
     rank(result) == len(layouts)
-    result[i] == layouts[i]   for i in rank(result)
+    result[i] == layouts[i]   for i in range(rank(result))
 
   Examples:
     make_layout([Layout(3, 1), Layout((5, 1), (7, 2)), Layout(2, 42)])
@@ -509,9 +520,9 @@ def make_ordered_layout(_shape: Shape, _order: IntTuple) -> Layout:
 # ---------------------------------------------------------------------------
 # Tiler type (Whitepaper, §3.3.5 By-mode Composition and Tilers).
 #
-# A ``Tiler`` is an HTuple whose leaves are either an :class:`Integer` (a mode
-# extent) or a :class:`Layout`. It is the general right-hand side accepted by
-# composition, ``logical_divide`` and ``logical_product``; ``tiler_to_layout``
+# A `Tiler` is an HTuple whose leaves are either an `Integer` (a mode
+# extent) or a `Layout`. It is the general right-hand side accepted by
+# composition, `logical_divide` and `logical_product`; `tiler_to_layout`
 # turns it into the equivalent single Layout.
 # ---------------------------------------------------------------------------
 
@@ -532,8 +543,8 @@ def tiler_to_layout(tiler: Tiler, e: StrideScalar = 1) -> Layout:
   Examples:
     tiler_to_layout(3)                          == Layout(3, 1)
     tiler_to_layout(Layout((7, 2), (3, 1)))     == Layout((7, 2), (3, 1))
-    tiler_to_layout((4, 5))                     == Layout((4, 5), (1@0, 1@1))
-    tiler_to_layout((Layout(4, 2), Layout(5, 3))) == Layout((4, 5), (2@0, 3@1))
+    tiler_to_layout((4, 5))                     == Layout((4, 5), (E(0), E(1)))       # prints as (1@0, 1@1)
+    tiler_to_layout((Layout(4, 2), Layout(5, 3))) == Layout((4, 5), (2*E(0), 3*E(1))) # prints as (2@0, 3@1)
   """
   if is_int(tiler):
     return Layout._set(tiler, e)

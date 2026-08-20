@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """
-Unit tests for pycute.typing
+Unit tests for pycute.typedefs
 """
 
 import importlib

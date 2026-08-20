@@ -11,6 +11,16 @@ from pycute import *
 
 
 def print_tensor(tensor : Union[Tensor, LayoutBase], print_type=True):
+  """
+  Print a layout or tensor of rank 1 through 4 as nested ASCII tables.
+
+  A `Layout` is rendered through an `ImplicitAccessor`, so each cell shows its
+  offset; a `Tensor` shows the element stored there. Ranks 3 and 4 are printed
+  as a series of rank-2 slices. `print_type` prepends the `Shape:Stride` header.
+
+  Pre-conditions:
+    rank(tensor) <= 4; otherwise a ValueError is raised
+  """
   if (print_type):
     print(tensor)
 

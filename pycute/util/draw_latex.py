@@ -78,6 +78,17 @@ def _write_and_compile(body, filename, compile_pdf):
 
 
 def draw_latex(tensor : Union[Tensor, LayoutBase], filename="layout.tex", compile_pdf=True, color=white):
+  """
+  The LaTeX/PDF analogue of `draw_svg`, mirroring `cute::print_latex`.
+
+  Writes a standalone TikZ document for a rank-2 `Tensor` or `Layout` (rank-1
+  becomes a single row) and, by default, compiles it to a cropped PDF with
+  `pdflatex`. A missing or failing `pdflatex` leaves the `.tex` in place rather
+  than raising. `color` has the same contract as in `draw_svg`.
+
+  Pre-conditions:
+    rank(tensor) is 1 or 2; otherwise a ValueError is raised
+  """
   if isinstance(tensor, LayoutBase):
     tensor = Tensor(ImplicitAccessor(0), tensor)
   if rank(tensor) == 1:
@@ -100,6 +111,18 @@ def draw_latex(tensor : Union[Tensor, LayoutBase], filename="layout.tex", compil
 
 
 def draw_latex_tv(layout : LayoutBase, tile_mn=None, filename="tvlayout.tex", compile_pdf=True, color=thread_color_8x):
+  """
+  The LaTeX/PDF analogue of `draw_svg_tv`.
+
+  Takes the same thread-value layouts -- a 2-D `(m, n)` codomain, or a linear
+  offset folded through a rank-2 `tile_mn` -- and renders them as TikZ with
+  `T`/`V` annotations, compiling to PDF by default. `color` has the same
+  contract as in `draw_svg_tv`.
+
+  Pre-conditions:
+    rank(layout) == 2 and rank(tile_mn) == 2
+    the codomain is 2-D once folded; otherwise a ValueError is raised
+  """
   if rank(layout) != 2:
     raise ValueError(f"Expected a rank-2 TV Layout")
 

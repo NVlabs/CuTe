@@ -3,6 +3,17 @@
 
 """
 Functions for CuTe Strides
+
+A `Stride` is an HTuple of stride scalars, congruent with a layout's `Shape`,
+giving the step each mode takes through the codomain (Whitepaper, §2.3). A leaf
+need only be an integer-semimodule element -- an `int`, an `ArithTuple`, an `F2`
+-- so the same machinery addresses linear memory, multidimensional coordinates
+and swizzled offsets alike.
+
+This module holds the stride-side operations: reading a stride (`stride`),
+evaluating one against a coordinate (`inner_product`), building a compact one
+from a shape (`prefix_product`), and describing the codomain a stride reaches
+(`coshape`, `coprofile`).
 """
 
 from .typedefs import *
@@ -11,7 +22,15 @@ from .htuple import *
 
 @ModeOpDecorator
 def stride(obj, *, mode=()) -> Stride:
-  """Get an object's stride"""
+  """
+  Get an object's stride.
+
+  Examples:
+    stride(Layout((4, 8), (1, 4)))          == (1, 4)
+    stride((1, (4, 8)))                     == (1, (4, 8))
+    stride[1](Layout((3, (2, 4))))          == (3, 6)
+    stride(Layout((4, 8), (F2(1), F2(8))))  == (F2(1), F2(8))
+  """
   if hasattr(obj, 'stride'):       # Use .stride() or .stride if available (Layouts/Tensors/Other)
     return get(obj.stride() if callable(getattr(obj, 'stride')) else obj.stride, mode=mode)
   if mode != ():                  # Not a Layout or Tensor, so slice once and recurse
@@ -68,7 +87,17 @@ def prefix_product(a: Shape, init: Stride = 1) -> Stride:
 @ModeOpDecorator
 def coshape(obj, *, mode=()) -> Shape:
   """
-  Shape of the codomain
+  Shape of the codomain: an extent large enough to hold every value `obj` produces.
+
+  Each mode contributes its maximal offset `(s-1) * d`, and where the codomain's
+  addition is monotone -- `Z` and `Z^S` -- those contributions add. A codomain
+  whose addition is not monotone supplies its own bound instead; `F2`, whose `+`
+  is XOR, is bounded by bit-span rather than by sum.
+
+  Examples:
+    coshape(Layout((4, 8), (1, 4)))        == 32
+    coshape(Layout((4, 8), (E(0), E(1))))  == (4, 8)
+    coshape(Layout(4, F2(3)))              == 8
   """
   if mode != ():
     return coshape(get(obj, mode=mode))
@@ -82,6 +111,16 @@ def coprofile(obj, *, mode=()) -> Profile:
   """
   Profile of the codomain: an HTuple congruent to `coshape(obj)` whose leaf values
   carry no meaning.
+
+  Read straight off the strides, so unlike `coshape` it stays defined for
+  codomains whose extents cannot be bounded.
+
+  Post-conditions:
+    congruent(coprofile(obj), coshape(obj))   wherever coshape is defined
+
+  Examples:
+    congruent(coprofile(Layout((4, 8), (1, 4))), 0)            == True
+    congruent(coprofile(Layout((4, 8), (E(0), E(1)))), (0, 0)) == True
   """
   if mode != ():
     return coprofile(get(obj, mode=mode))
@@ -99,8 +138,8 @@ def _coalesce_z(shape: Shape, stride: Stride) -> tuple[Shape, Stride]:
   layout's evaluation. The merge condition below verifies this with two 
   O(1) checks that are jointly necessary and sufficient:
 
-    1. ``s_a*d_a == d_b``                       (linearity at ``(0, 1)``)
-    2. ``(s_a-1)*d_a + d_b == (2*s_a-1)*d_a``   (linearity at ``(s_a-1, 1)``)
+    1. `s_a*d_a == d_b`                       (linearity at `(0, 1)`)
+    2. `(s_a-1)*d_a + d_b == (2*s_a-1)*d_a`   (linearity at `(s_a-1, 1)`)
 
   Pre-conditions:
     congruent(shape, stride)

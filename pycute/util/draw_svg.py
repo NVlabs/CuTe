@@ -30,6 +30,19 @@ def _draw_index_labels(dwg, M, N, cell_size, margin):
 
 
 def draw_svg(tensor : Union[Tensor, LayoutBase], filename="layout.svg", color=white):
+  """
+  Save a rank-2 `Tensor` or `Layout` as an SVG table with row/column labels.
+
+  A `Layout` labels each cell with its offset, a `Tensor` with the element
+  stored there. A rank-1 input is drawn as a single row. `color` is a functor
+  `color(idx) -> (r, g, b)` keyed on the cell's offset; `draw_colors` holds a
+  catalog of them.
+
+  Requires the optional `svgwrite` package (`pip install pycute[viz]`).
+
+  Pre-conditions:
+    rank(tensor) is 1 or 2; otherwise a ValueError is raised
+  """
   try:
     import svgwrite
   except ImportError as e:
@@ -81,6 +94,22 @@ def draw_svg(tensor : Union[Tensor, LayoutBase], filename="layout.svg", color=wh
 
 
 def draw_svg_tv(layout : LayoutBase, tile_mn=None, filename="tvlayout.svg", color=thread_color_8x):
+  """
+  Save a rank-2 thread-value layout as a colored SVG table with `T`/`V` labels.
+
+  The layout maps `(tid, vid)` to a position in the tile. Its codomain may be
+  2-D `(m, n)` coordinates, or a linear offset -- in which case a rank-2
+  `tile_mn` is required and the offsets are folded into the tile via
+  `composition(tile_mn, layout)`. `color` is a functor
+  `color(tid, vid) -> (r, g, b)`; where several `(tid, vid)` pairs land on one
+  cell, the first drawn wins.
+
+  Requires the optional `svgwrite` package (`pip install pycute[viz]`).
+
+  Pre-conditions:
+    rank(layout) == 2 and rank(tile_mn) == 2
+    the codomain is 2-D once folded; otherwise a ValueError is raised
+  """
   try:
     import svgwrite
   except ImportError as e:

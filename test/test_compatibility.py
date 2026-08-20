@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """
-Unit tests for pycute.shape: congruent, weakly_congruent, compatible.
+Unit tests for pycute.congruent, pycute.weakly_congruent and pycute.compatible.
 
 These tests are also worked examples for docs/02_shape_stride.md.
 

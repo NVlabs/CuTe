@@ -201,8 +201,13 @@ class TestImplicitZeroEquality:
     assert idx2crd(ArithTuple((1,)), (8, 8)) == (1, 0)
 
 
-class TestWeaklyCongruentImplicitZero:
-  """Trailing implicit zeros are admissible at any sub-shape."""
+class TestWeaklyCongruentLeaf:
+  """An ArithTuple is an HTuple leaf, so it coarsens any profile.
+
+  Reading its `data` as a coordinate tuple here instead would cost weak
+  congruence its transitivity, since a leaf coarsens any scalar and a scalar
+  coarsens any tuple. Indexing enforces that alignment itself, in `idx2crd`.
+  """
 
   def test_int_coarsens_anything(self):
     assert weakly_congruent(1, (8, 8))
@@ -216,12 +221,77 @@ class TestWeaklyCongruentImplicitZero:
   def test_explicit_atuple_coarsens_matching_profile(self):
     assert weakly_congruent(ArithTuple((1, 1)), (8, 8))
 
-  def test_atuple_rank_exceeding_profile_is_not_weakly_congruent(self):
-    assert not weakly_congruent(ArithTuple((1, 1, 1)), (8, 8))
-
-  def test_basis_at_path_coarsens_compatible_subprofile(self):
+  def test_atuple_coarsens_a_profile_of_any_rank(self):
+    assert weakly_congruent(ArithTuple((1, 1, 1)), (8, 8))
     assert weakly_congruent(E(0, 0), ((4, 5), 8))
-    assert not weakly_congruent(E(0, 0), (8, 8))
+    assert weakly_congruent(E(0, 0), (8, 8))
+
+  def test_idx2crd_rejects_a_coordinate_that_cannot_index_the_shape(self):
+    """The rank check the predicate leaves alone lives here, where it is used."""
+    with pytest.raises(ValueError):
+      idx2crd(ArithTuple((1, 1, 1)), (8, 8))       # rank exceeds the shape
+    with pytest.raises(ValueError):
+      idx2crd(E(0, 0), (8, 8))                     # nested basis, flat shape
+    with pytest.raises(ValueError):
+      idx2crd(ArithTuple(1, 2), 14)                # rank-2 coordinate, rank-0 shape
+
+  def test_idx2crd_accepts_an_aligned_coordinate(self):
+    assert idx2crd(E(0, 0), ((4, 5), 8)) == ((1, 0), 0)
+    assert idx2crd(ArithTuple((1, 1)), (8, 8)) == (1, 1)
+    assert idx2crd(E(0), (8, 8)) == (1, 0)
+
+  def test_weak_congruence_is_transitive_through_a_leaf(self):
+    """The law the coordinate reading used to break."""
+    assert weakly_congruent(E(0, 0), 10)
+    assert weakly_congruent(10, (10, 20))
+    assert weakly_congruent(E(0, 0), (10, 20))
+
+
+class TestCongruentStrideLeaf:
+  """An ArithTuple is an HTuple leaf, so it is congruent to a leaf.
+
+  This is what makes a coordinate stride congruent with the shape it strides,
+  and so what makes `Layout(s, make_basis_like(s))` well-formed.
+  """
+
+  def test_basis_is_congruent_to_a_leaf(self):
+    assert congruent(E(0), 10)
+    assert congruent(10, E(0))
+    assert congruent(E(1, 0), 10)
+    assert congruent(ArithTuple(1, 2), 5)
+
+  def test_basis_is_not_congruent_to_a_tuple(self):
+    """The leaf reading applies to `congruent` in both argument positions."""
+    assert not congruent(E(0), (10, 20))
+    assert not congruent((10, 20), E(0))
+
+  def test_make_basis_like_is_congruent_to_its_profile(self):
+    assert congruent(make_basis_like(10), 10)
+    assert congruent(make_basis_like((10, 20)), (10, 20))
+    assert congruent(make_basis_like((10, (20, 30))), (10, (20, 30)))
+    assert congruent(make_basis_like(((1, 2), (3, (4, 5)))), ((1, 2), (3, (4, 5))))
+    assert congruent(make_basis_like((4, 8, 2)), (4, 8, 2))
+
+  def test_congruence_to_a_profile_is_symmetric(self):
+    assert congruent(10, make_basis_like(10))
+    assert congruent((10, 20), make_basis_like((10, 20)))
+    assert congruent((10, (20, 30)), make_basis_like((10, (20, 30))))
+
+  def test_identity_layout_has_congruent_shape_and_stride(self):
+    """The point of the whole relation: `Layout(s, make_basis_like(s))`."""
+    L = Layout(10, make_basis_like(10))
+    assert congruent(L.shape, L.stride)
+    L = Layout((10, 20), make_basis_like((10, 20)))
+    assert congruent(L.shape, L.stride)
+    L = Layout((10, (20, 30)), make_basis_like((10, (20, 30))))
+    assert congruent(L.shape, L.stride)
+
+  def test_congruence_implies_weak_congruence(self):
+    """The implication of `weakly_congruent` holds of a coordinate stride."""
+    assert weakly_congruent(make_basis_like(10), 10)
+    assert weakly_congruent(make_basis_like((10, 20)), (10, 20))
+    assert weakly_congruent(make_basis_like((10, (20, 30))), (10, (20, 30)))
+    assert weakly_congruent(make_basis_like(((1, 2), (3, (4, 5)))), ((1, 2), (3, (4, 5))))
 
 
 class TestBasisRepr:

@@ -3,6 +3,13 @@
 
 """
 Methods for layout swizzling
+
+A swizzle permutes the offsets a layout produces, to spread accesses across
+shared-memory banks. `F2` expresses one as a stride: because its `+` is XOR, an
+`F2`-strided `Layout` is an ordinary layout that happens to XOR its coordinates
+together, and so passes through the whole algebra. `Swizzle` is the same
+transformation written as a plain function on integers, for inspecting an
+existing offset pattern.
 """
 
 from .stride import *
@@ -11,9 +18,24 @@ from .layout import *
 
 class F2(StrideScalar):
   """
-  An algebraic type that can be used as a stride scalar for swizzling.
+  A stride scalar over the binary field: `+` is XOR and `*` is carry-less.
 
-  This type replaces integer addition with binary xor.
+  An element of `F_2^m = (Z_{2^m}, XOR, .)`, whose bits are the coefficients of
+  a polynomial over the two-element field. Both the `F2 * F2` and `F2 * int`
+  products are carry-less, so an integer operand acts through its bits rather
+  than its value; the two agree wherever schoolbook multiplication carries
+  nowhere, as it does for a power-of-two operand.
+
+  Adding a nonzero `int` is an error rather than a coercion, since mixing `Z`'s
+  carrying addition into XOR is the hazard the separate type exists to prevent.
+
+  Examples:
+    F2(0b1010) + F2(0b1100) == F2(0b0110)
+    3 * F2(0b1010)          == F2(0b11110)
+    F2(0b11) * 0b11         == F2(0b101)     # carry-less, where 3 * 3 == 9 in Z
+    F2(1) + 0               == F2(1)         # 0 is still the identity
+    F2(1) + 1               -> TypeError
+    Layout((4, 8), (F2(1), F2(8)))(2, 1) == F2(2 ^ 8)
   """
   def __init__(self, value):
       # Idempotent on F2, so wrapping a value that may already be an F2 is safe.
@@ -217,10 +239,24 @@ class F2(StrideScalar):
 
 
 def shiftr(a: int, s: int) -> int:
+  """
+  Shift `a` right by `s`, or left by `-s` when `s` is negative.
+
+  Examples:
+    shiftr(0b1000, 2)   == 0b10
+    shiftr(0b1000, -2)  == 0b100000
+  """
   return a >> s if s >= 0 else a << -s
 
 
 def shiftl(a: int, s: int) -> int:
+  """
+  Shift `a` left by `s`, or right by `-s` when `s` is negative.
+
+  Examples:
+    shiftl(0b1000, 2)   == 0b100000
+    shiftl(0b1000, -2)  == 0b10
+  """
   return a << s if s >= 0 else a >> -s
 
 
@@ -237,6 +273,20 @@ class Swizzle:
   0bxxxxxxxxxxxxxxxxYYxxxxxxxxxZZxxx
   the result is
   0bxxxxxxxxxxxxxxxxYYxxxxxxxxxAAxxx where AA = ZZ xor YY
+
+  Pre-conditions:
+    bits >= 0, base >= 0, and either shift >= 0 or abs(shift) >= bits;
+    otherwise a ValueError is raised
+
+  Post-conditions:
+    involution, when the YYY and ZZZ fields do not overlap (abs(shift) >= bits):
+      S(S(offset)) == offset
+
+  Examples:
+    Swizzle(1, 0, 1)(0b00)                    == 0b00
+    Swizzle(1, 0, 1)(0b10)                    == 0b11
+    Swizzle(1, 0, 1)(Swizzle(1, 0, 1)(0b10))  == 0b10
+    Swizzle(-1, 0, 1)                         -> ValueError
   """
   def __init__(self, bits, base, shift):
     if bits < 0: raise ValueError(f"Swizzle({bits}, {base}, {shift})")
@@ -249,8 +299,8 @@ class Swizzle:
     self.yyy_msk = bit_msk << (base + max(0,shift))
     self.zzz_msk = bit_msk << (base - min(0,shift))
 
-  # operator ()    (transform integer)
   def __call__(self, offset):
+    """Apply the swizzle to an integer offset."""
     return offset ^ shiftr(offset & self.yyy_msk, self.shift)
 
   # print and str
