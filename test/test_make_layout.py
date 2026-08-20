@@ -42,6 +42,17 @@ class TestMakeLayout:
                            make_layout([A[1][0], A[1][1]])])
     assert A == rebuilt
 
+  def test_make_layout_of_nothing_is_trivial(self):
+    assert make_layout([])       == Layout((), ())
+    assert make_layout(iter([])) == Layout((), ())   # a generator, as callers pass
+    assert rank(make_layout([]))  == 0
+    assert size(make_layout([]))  == 1
+    assert coalesce(make_layout([])) == Layout(1, 0)  # the algebra normalizes it
+
+    A = Layout((3, 4), (4, 1))
+    assert make_layout([A, make_layout([])]) == Layout(((3, 4), ()), ((4, 1), ()))
+    assert all(make_layout([A, make_layout([])])(c, 0) == A(c) for c in range(size(A)))
+
 
 class TestTilerToLayout:
   """`tiler_to_layout` converts a "tiler" (an int, tuple of tilers, or

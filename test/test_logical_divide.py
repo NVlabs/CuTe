@@ -156,11 +156,27 @@ class TestLogicalDivide:
     assert logical_divide(6,     Layout(2,1)) == logical_divide(Layout(6,1),            Layout(2,1))
     assert logical_divide((6,4), Layout(2,1)) == logical_divide(tiler_to_layout((6,4)), Layout(2,1))
 
-    # -- A = None: acts as identity
+    # -- A = None: the identity of unknown extents, so the grid takes B's *free*
+    #    complement -- and dividing nothing by nothing is nothing.
     assert logical_divide(None, Layout(2,1)) == Layout((2, 1), (1, 2))
     assert logical_divide(None, (3,5)) == Layout(((3, 1), (5, 1)), ((E(0), 3*E(0)), (E(1), 5*E(1))))
+    assert logical_divide(None, None) is None
+    assert logical_divide(None, (Layout(2,1), None)) == Layout(((2, 1), (1, 1)),
+                                                              ((E(0), 2*E(0)), (E(1), E(1))))
     assert zipped_divide(None, Layout(2,1)) == Layout((2, 1), (1, 2))
     assert zipped_divide(None, (3,5)) == Layout(((3, 5), (1, 1)), ((E(0), E(1)), (3*E(0), 5*E(1))))
+
+    # -- Only the extent A would have supplied is unknown, so the grid keeps
+    #    every mode B alone determines: the same divide, with the extent of A's
+    #    own mode standing at 1.
+    assert logical_divide(None,        Layout(4,2)) == Layout((4, (2, 1)), (2, (1, 8)))
+    assert logical_divide(Layout(24),  Layout(4,2)) == Layout((4, (2, 3)), (2, (1, 8)))
+
+    # -- A = None has no modes to select, so a mode places the result instead of
+    #    selecting into A, and the tiler's own modes keep their basis paths.
+    assert logical_divide[0](None, (3,5)) == make_layout([logical_divide(None, (3,5))])
+    assert logical_divide[1](None, Layout(2,1)) == make_layout([Layout(1, 0),
+                                                               logical_divide(None, Layout(2,1))])
 
     # -- B promotions: None is a no-op; int promotes to N:1
     assert logical_divide(A, None) == A
@@ -182,11 +198,11 @@ class TestLogicalDivide:
     # which is what makes the by-mode results carry E(0)/E(1).
     cases = [
       # A                             B                             expected
-      (None,                          None,                         TypeError),
+      (None,                          None,                         None),
       (None,                          2,                            Layout((2, 1), (1, 2))),
       (None,                          (2, 2),                       Layout(((2, 1), (2, 1)), ((E(0), 2*E(0)), (E(1), 2*E(1))))),
       (None,                          Layout(2, 1),                 Layout((2, 1), (1, 2))),
-      (None,                          (Layout(2, 1), Layout(2, 2)),  Layout(((2, 1), (2, 2)), ((E(0), 2*E(0)), (2*E(1), E(1))))),
+      (None,                          (Layout(2, 1), Layout(2, 2)),  Layout(((2, 1), (2, (2, 1))), ((E(0), 2*E(0)), (2*E(1), (E(1), 4*E(1)))))),
 
       (24,                            None,                         Layout(24, 1)),
       (24,                            2,                            Layout((2, 12), (1, 2))),
@@ -234,14 +250,20 @@ class TestLogicalDivide:
 
 
   def test_logical_divide_short_and_padded_tiler(self):
-    # A tuple B shorter than A leaves A's trailing modes untouched, and a None
-    # entry leaves its own mode untouched -- both spellings of "no tile here".
+    # B rewrites rather than selects -- every element of A is in the result, just
+    # refactored -- so a tuple B may run short: the modes it does not reach are
+    # simply not refactored. A None entry says the same of its own mode.
     for A in [Layout((6, 4), (4, 1)), (6, 4), (Layout(6, 2), Layout(4, 1))]:
       L = tiler_to_layout(A)
       assert logical_divide(A, (Layout(2, 1),)) == make_layout([logical_divide(L[0], Layout(2, 1)), L[1]])
       assert logical_divide(A, (Layout(2, 1), None)) == logical_divide(A, (Layout(2, 1),))
       assert logical_divide(A, (None, Layout(2, 1))) == make_layout([L[0], logical_divide(L[1], Layout(2, 1))])
       assert logical_divide(A, (None, None)) == L
+      assert logical_divide(A, ()) == L                  # divides nothing
+
+      # Rewriting preserves every element of A, however short the tiler
+      for B in [(Layout(2, 1),), (Layout(2, 1), None), (None, None), ()]:
+        assert size(logical_divide(A, B)) == size(L)
 
     # B may not out-rank A
     with pytest.raises(ValueError):

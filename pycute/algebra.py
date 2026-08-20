@@ -86,6 +86,10 @@ def composition(A, B: Tiler, *, mode=()):
   by-mode (`(A0, A1, ...) o <X, Y, ...> = (A0 o X, A1 o Y, ...)`) and `B=None` is
   a no-op. Integers and tuples are promoted via `tiler_to_layout`.
 
+  An `A` of `None` is the identity of unknown extents. It imposes no
+  divisibility condition, and the result is the coordinates `B` itself walks,
+  `tiler_to_layout(B)`.
+
   A non-empty `mode` composes only that mode of `A` and leaves every other mode
   unchanged.
 
@@ -103,13 +107,17 @@ def composition(A, B: Tiler, *, mode=()):
     composition(Layout(20, 2), Layout((5, 4), (4, 1)))          == Layout((5, 4), (8, 2))
     composition(Layout(12), Layout((4, 3)))                     == Layout((4, 3), (1, 4))
     composition[1](Layout((4, 6), (1, 4)), Layout(3, 2))        == Layout((4, 3), (1, 8))
+    composition(None, (4, 3))                                   == Layout((4, 3), (1@0, 1@1))
   """
+  if A is None:
+    if B is None:
+      return None
+    B = transform_leaf(lambda b: 1 if b is None else b, B)   # No extent to keep
+    return lift(tiler_to_layout(B), pad=Layout(1, 0), make=make_layout, mode=mode)
   if mode != ():
-    return composition(A, lift(B, pad=None, mode=mode))
+    return composition(A, replace(repeat_like(None, shape(A)), B, mode=mode))
   if hasattr(A, '_composition'):
     return A._composition(B)
-  if A is None:
-    return B
   if is_int(A) or is_tuple(A):
     return composition(tiler_to_layout(A), B)
   raise TypeError(f"composition not supported for type {type(A)}")
@@ -251,6 +259,7 @@ def logical_product(A, B: Tiler, *, mode=()):
 
   Post-conditions:
     rank(get[mode](result)) == 2  when is_layout(B)
+    size(result) == size(A) * size(B)
     get[mode](result)[0] == get[mode](A)
     compatible(B, get[mode](result)[1])
 
@@ -291,9 +300,14 @@ def logical_divide(A, B: Tiler, *, mode=()):
   `B=None` is a no-op. An integer or tuple `A` is promoted via `tiler_to_layout`
   before `B` is applied, so a by-mode `B` sees the promoted Layout's modes.
 
+  An `A` of `None` is the identity of unknown extents, so `A o (B, B*)` takes the
+  *free* complement.
+
   A non-empty `mode` divides only that mode of `A` and leaves every other mode
   unchanged, so `logical_divide[0, 1](A, B)` is `A` with mode `(0, 1)` replaced
-  by `logical_divide(get[0, 1](A), B)`.
+  by `logical_divide(get[0, 1](A), B)`. An `A` of `None` has no modes to select,
+  so `mode` names where the result lands instead, and the modes it does not name
+  are filled with `1:0`.
 
   Pre-conditions:
     B divides A (the underlying composition's divisibility conditions hold);
@@ -308,13 +322,19 @@ def logical_divide(A, B: Tiler, *, mode=()):
   Examples:
     logical_divide(Layout(24), Layout(4, 2))         == Layout((4, (2, 3)), (2, (1, 8)))
     logical_divide[1](Layout((3, 8)), Layout(4, 2))  == Layout((3, (4, 2)), (1, (6, 3)))
+    logical_divide(None, Layout(4, 2))               == Layout((4, (2, 1)), (2, (1, 8)))
   """
+  if A is None:
+    if B is None:
+      return None
+    # `A o (B, B*)`, the complement left free for want of an extent to extend to
+    B = transform_leaf(lambda b: tiler_to_layout(1 if b is None else b), B)
+    B = transform_leaf(lambda b: make_layout([b, complement(b)]), B)
+    return composition(None, B, mode=mode)
   if mode != ():
     return logical_divide(A, lift(B, pad=None, mode=mode))
   if hasattr(A, '_logical_divide'):
     return A._logical_divide(B)
-  if A is None:
-    return logical_divide(tiler_to_layout(repeat_like(1, coprofile(tiler_to_layout(B)))), B)
   if is_int(A) or is_tuple(A):
     A = tiler_to_layout(A)
   if not is_layout(A):

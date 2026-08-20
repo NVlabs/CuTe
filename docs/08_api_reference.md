@@ -81,15 +81,29 @@ Index by path (a tuple of indices). `mode` is keyword-only; the subscript form
 42
 ```
 
-### `lift(obj, *, pad=0, mode=())`
+### `lift(obj, *, pad=0, make=tuple, mode=())`
 
-Insert `obj` at a given path inside a `pad`-filled structure.
+Insert `obj` at a given path inside a `pad`-filled structure, each mode built by
+`make`.
 
 ```python
 >>> lift[0, 2, 3](42)
 ((0, 0, (0, 0, 0, 42)),)
 >>> lift[1](42, pad=None)
 (None, 42)
+>>> lift[1](Layout(4, 2), pad=Layout(1, 0), make=make_layout)
+Layout((1, 4), (0, 2))
+```
+
+### `replace(obj, x, *, mode=())`
+
+Copy `obj` with the element at `mode` replaced by `x`, the counterpart of `get`.
+
+```python
+>>> replace[1]((1, 2, 3), 42)
+(1, 42, 3)
+>>> replace[1](repeat_like(None, (3, 4)), Layout(2, 1))
+(None, Layout(2, 1))
 ```
 
 ### `transform_apply_leaf(g, f, htuple, *tuples)` / `transform_leaf(f, *tuples)`
@@ -148,10 +162,10 @@ Subscript form `select[i, j, ...]` / `take[i, j]` works as well. Tests:
 Layout((3, 7), (2, 30))
 ```
 
-### `slice_(htuple, B)` / `dice_(htuple, B)`
+### `slice_(htuple, B, g=tuple)` / `dice_(htuple, B, g=tuple)`
 
 Extract leaves of `B` corresponding to `None`/non-`None` leaves of
-`htuple`. Test:
+`htuple`, collected by `g`. Test:
 [`test_htuple.py::TestHTuple::test_slice_dice`](../test/test_htuple.py).
 
 ```python
@@ -159,6 +173,8 @@ Extract leaves of `B` corresponding to `None`/non-`None` leaves of
 ((2, 3),)
 >>> dice_((None, 1), ((2, 3), (5, 7, 9)))
 ((5, 7, 9),)
+>>> slice_((None, 1), (Layout(4), Layout(8)), make_layout)   # collect as a Layout
+Layout((4,), (1,))
 ```
 
 ### `zip_leaves(htuple, *tuples)` / `fold_leaf(fn, v, *tuples)`
@@ -1108,7 +1124,7 @@ is the authoritative source. Each PyCuTe test defines a
 
 | Test | What it checks |
 |---|---|
-| [`test_htuple.py`](../test/test_htuple.py) | `is_tuple`/`wrap`/`unwrap`, `product`, `product_each`, `inner_product`, `prefix_product`, `idx2crd`/`crd2idx` round-trip, `slice_`/`dice_`, `get`/`lift` round-trip, `select`/`take`, `transform_leaf`, `flatten`/`unflatten`/`repeat_like`, mode-indexed `shape`/`size`/`rank`/`depth` |
+| [`test_htuple.py`](../test/test_htuple.py) | `is_tuple`/`wrap`/`unwrap`, `product`, `product_each`, `inner_product`, `prefix_product`, `idx2crd`/`crd2idx` round-trip, `slice_`/`dice_`, `get`/`lift`/`replace` round-trip, `select`/`take`, `transform_leaf`, `flatten`/`unflatten`/`repeat_like`, mode-indexed `shape`/`size`/`rank`/`depth` |
 | [`test_atuple.py`](../test/test_atuple.py) | `ArithTuple` arithmetic, `ScaledBasis` semantics, colex ordering, coordinate-strided layouts |
 | [`test_typing.py`](../test/test_typing.py) | `Integer` / `is_int`, `sympy` symbol compatibility, layout algebra with symbolic shapes |
 | [`test_layout_add.py`](../test/test_layout_add.py) | `layout_add` post-conditions |

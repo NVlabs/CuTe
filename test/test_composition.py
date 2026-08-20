@@ -82,16 +82,73 @@ class TestComposition:
     B = Layout((4, 3), (3, 1))
 
     assert composition[0](A, B) == make_layout([composition(A[0], B), A[1]])
-    assert composition[0](A, B) == composition(A, (B,))
+    # The mode-op is a tiler naming every mode of A, so the modes it does not
+    # name are kept by an explicit `None` rather than by being left off.
+    assert composition[0](A, B) == composition(A, (B, None))
     assert composition[0][0](A, Layout(3, 2)) == composition[0, 0](A, Layout(3, 2))
     assert composition(A, B, mode=(0,)) == composition[0](A, B)
     assert composition(A, B, mode=()) == composition(A, B)
+
+    # Mode 0 of a depth-0 layout is the layout itself
+    assert composition[0](Layout(6, 1), Layout(3, 1)) == Layout((3,), (1,))
+
+    # The named mode must exist
+    with pytest.raises(ValueError):
+      composition[2](A, B)
 
     # Post-conditions hold of the composed mode
     R = composition[0](A, B)
     assert compatible(B, get[0](R))
     for i in range(size(B)):
       assert get[0](R)(i) == get[0](A)(B(i))
+
+  def test_a_tiler_and_its_layout_compose_alike(self):
+    """`tiler_to_layout` promotes a by-mode tiler to the single Layout that acts
+    identically under composition. That has to hold for a tiler that names only
+    some of A's modes too, which is what makes a tiler's rank meaningful: the
+    modes it does not name are not in the result."""
+    A = Layout((4, 5))
+
+    assert composition(A, (2,)) == composition(A, tiler_to_layout((2,)))
+    assert composition(A, (2,)) == Layout((2,), (1,))
+
+    for A, B in [(Layout((4, 5)),                  (2,)),
+                 (Layout((4, 5)),                  (2, 5)),
+                 (Layout((4, 5)),                  (Layout(2, 2),)),
+                 (Layout((4, 5)),                  (Layout(2, 2), Layout(5, 1))),
+                 (Layout((4, 5)),                  ()),
+                 (Layout(((4, 2), 5), ((5, 40), 1)), (2,)),
+                 (Layout(((4, 2), 5), ((5, 40), 1)), ((2, 2), 5)),
+                 (Layout((6, 4), (4, 1)),          (3,)),
+                 (Layout((6, 4), (4, 1)),          (3, 2))]:
+      assert composition(A, B) == composition(A, tiler_to_layout(B)), f"{A} o {B}"
+      assert compatible(B, composition(A, B)), f"{A} o {B}"
+
+  def test_composition_none_lhs(self):
+    # `A = None` is the identity of unknown extents: it imposes no divisibility
+    # condition and leaves the coordinates B walks as the result. Composing it
+    # away is invisible to whatever composes next, which is what makes it an
+    # identity: composition(A, composition(None, B)) == composition(A, B).
+    assert composition(None, 12)                 == Layout(12, 1)
+    assert composition(None, Layout(4, 2))       == Layout(4, 2)
+    assert composition(None, (3, 2))             == Layout((3, 2), (E(0), E(1)))
+    assert composition(None, (Layout(3, 2), 2))  == Layout((3, 2), (2*E(0), E(1)))
+    assert composition(None, None)               is None
+    # A tiler leaf of None keeps a mode's extent, and there is none to keep, so
+    # the mode stands at 1 and carries only its stride.
+    assert composition(None, (Layout(3, 2), None)) == Layout((3, 1), (2*E(0), E(1)))
+
+    for A, B in [(Layout(24),               12),
+                 (Layout(24),               Layout(4, 2)),
+                 (Layout(24),               None),
+                 (Layout((6, 4), (4, 1)),   (3, 2)),
+                 (Layout((6, 4), (4, 1)),   (Layout(3, 2), 2))]:
+      assert composition(A, composition(None, B)) == composition(A, B)
+
+    # `None` has no modes to select, so a mode places the result instead of
+    # selecting into A, and the tiler's own modes keep their basis paths.
+    assert composition[0](None, (3, 2)) == make_layout([composition(None, (3, 2))])
+    assert composition[1](None, 12)     == make_layout([Layout(1, 0), Layout(12, 1)])
 
   def test_composition_fails(self):
 

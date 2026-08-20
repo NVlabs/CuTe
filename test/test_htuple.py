@@ -175,6 +175,51 @@ class TestGetLift:
     with pytest.raises(TypeError):
       lift[1](42, None)
 
+  def test_replace_at_a_path(self):
+    """`replace` puts a value into a structure that is already there, where
+    `lift` builds one around it."""
+    assert replace[1]((1, 2, 3), 42) == (1, 42, 3)
+    assert replace[0, 2](((1, 2, 3), 4), 42) == ((1, 2, 42), 4)
+    assert replace((1, 2, 3), 42, mode=(1,)) == (1, 42, 3)
+    assert replace((1, 2), 42, mode=()) == 42        # an empty path is the whole
+
+  def test_replace_round_trip(self):
+    """`get[mode](replace[mode](obj, x)) == x` for any `obj`, `x` and `mode`."""
+    obj = ((1, (2, 3)), 4, (5, 6))
+    for mode in [(), (1,), (0, 1, 0), (2, 1)]:
+      assert get[mode](replace[mode](obj, 99)) == 99
+
+  def test_replace_names_an_existing_mode(self):
+    """Unlike `lift`, `replace` will not create the mode it is given."""
+    with pytest.raises(ValueError):
+      replace[2]((1, 2), 42)
+    assert lift[2](42, pad=None) == (None, None, 42)  # `lift` creates it
+
+  def test_replace_of_a_profile_names_one_mode(self):
+    """With `repeat_like`, `replace` builds the tiler that names one mode of a
+    shape and says nothing about the others -- what a mode-indexed algebra
+    operation applies."""
+    A = Layout(((3, 8), 5), ((1, 3), 24))
+    assert replace[1](repeat_like(None, shape(A)), Layout(5, 1)) == ((None, None), Layout(5, 1))
+    assert replace[0, 1](repeat_like(None, shape(A)), Layout(4, 2)) == ((None, Layout(4, 2)), None)
+
+    for mode in [(0,), (1,), (0, 1)]:
+      B = Layout(1, 0)
+      assert composition(A, replace(repeat_like(None, shape(A)), B, mode=mode)) \
+             == composition[mode](A, B)
+
+  def test_lift_make(self):
+    """`make` builds each mode created, so `lift` raises a Layout through the
+    modes of a larger one -- padded with the mode that goes nowhere -- and the
+    round trip holds there too."""
+    L = Layout(4, 2)
+    for mode in [(0,), (1,), (1, 0)]:
+      R = lift(L, mode=mode, pad=Layout(1, 0), make=make_layout)
+      assert is_layout(R)
+      assert get[mode](R) == L
+
+    assert lift[1](L, pad=Layout(1, 0), make=make_layout) == Layout((1, 4), (0, 2))
+
 
 class TestSelectTake:
   """`select` picks specific top-level modes; `take` picks a range

@@ -185,7 +185,7 @@ class Layout(LayoutBase):
       B = Layout._set(B, 1)
     if is_tuple(B):         # RHS tuple, (A0,A1,...) o <X,Y,...> => (A0 o X, A1 o Y, ...)
       if rank(self) < len(B): raise ValueError(f"Rank mismatch: composition({self}, {B})")
-      return make_layout(a._composition(b) for a,b in zip_longest(self,B))
+      return make_layout(a._composition(b) for a,b in zip(self,B))
 
     #
     # Special cases with A: Layout and B: Layout
@@ -413,8 +413,12 @@ def make_layout(layouts: Iterable[Layout]) -> Layout:
   Examples:
     make_layout([Layout(3, 1), Layout((5, 1), (7, 2)), Layout(2, 42)])
         == Layout((3, (5, 1), 2), (1, (7, 2), 42))
+    make_layout([]) == Layout((), ())
   """
-  return Layout._set(*zip(*((a.shape,a.stride) for a in layouts)))
+  modes = list(layouts)
+  if not modes:
+    return Layout._set((), ())
+  return Layout._set(*zip(*((a.shape,a.stride) for a in modes)))
 
 
 def make_layout_like(layout: Layout) -> Layout:

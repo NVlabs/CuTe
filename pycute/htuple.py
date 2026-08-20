@@ -22,7 +22,7 @@ def profile(obj) -> Profile:
   """
   Get an object's *profile*: its HTuple tree with the leaves left as they are.
 
-  An object carrying a CuTe shape -- a `Layout`, a `Tensor` -- profiles as that 
+  An object carrying a CuTe shape -- a `Layout`, a `Tensor` -- profiles as that
   shape; every other object already *is* its own profile, because `congruent` and
   `weakly_congruent` read a tuple's tree and ignore whatever sits at its leaves.
 
@@ -172,13 +172,14 @@ def get(obj: HTuple, *, mode=()) -> HTuple:
 
 
 @ModeOpDecorator
-def lift(obj, *, pad=0, mode=()):
+def lift(obj, *, pad=0, make=tuple, mode=()):
   """
   Create an object with obj as the mode-th element.
 
   Args:
     obj: The object to place at `mode`
     pad: The value filling the modes that `mode` does not name
+    make: Builds each mode created, from the sequence of its elements
     mode: Sequence of indices to apply in order
 
   Example:
@@ -186,13 +187,44 @@ def lift(obj, *, pad=0, mode=()):
     ((0, 0, (0, 0, 0, 42)),)
     >>> lift[1](42, pad=None)
     (None, 42)
+    >>> lift[1](Layout(4, 2), pad=Layout(1, 0), make=make_layout)
+    Layout((1, 4), (0, 2))
 
   Post-condition:
     get[mode](lift[mode](x)) == x
   """
   result = obj
-  [result := (pad,) * i + (result,) for i in reversed(mode)]
+  for i in reversed(mode):
+    result = make((pad,) * i + (result,))
   return result
+
+
+@ModeOpDecorator
+def replace(obj, x, *, mode=()):
+  """
+  Create a copy of obj with its mode-th element replaced by x.
+
+  Args:
+    obj: The object to replace within
+    x: The value to place at `mode`
+    mode: Sequence of indices to apply in order
+
+  Example:
+    >>> replace[1]((1, 2, 3), 42)
+    (1, 42, 3)
+    >>> replace[0, 2](((1, 2, 3), 4), 42)
+    ((1, 2, 42), 4)
+    >>> replace[1](repeat_like(None, (3, 4)), 42)
+    (None, 42)
+
+  Post-condition:
+    get[mode](replace[mode](obj, x)) == x
+  """
+  if mode == ():
+    return x
+  obj = wrap(obj)
+  if mode[0] >= len(obj): raise ValueError(f"replace({obj}, {x}, {mode}): no mode {mode[0]}")
+  return tuple(replace(o, x, mode=mode[1:]) if i == mode[0] else o for i,o in enumerate(obj))
 
 
 @ModeOpDecorator
@@ -273,17 +305,17 @@ def product_each(a: HTuple) -> tuple:
   return tuple(product(x) for x in a)
 
 
-def slice_(htuple: Profile, B: HTuple) -> tuple:
+def slice_(htuple: Profile, B: HTuple, g=tuple) -> HTuple:
   """
   Recursively extract and flatten the elements of B
   where the corresponding element in htuple is None
   """
-  return tuple(b for a,b in zip_leaves(htuple,B) if a is None)
+  return g(b for a,b in zip_leaves(htuple,B) if a is None)
 
 
-def dice_(htuple: Profile, B: HTuple) -> tuple:
+def dice_(htuple: Profile, B: HTuple, g=tuple) -> HTuple:
   """
   Recursively extract and flatten the elements of B
   where the corresponding element in htuple is not None
   """
-  return tuple(b for a,b in zip_leaves(htuple,B) if a is not None)
+  return g(b for a,b in zip_leaves(htuple,B) if a is not None)

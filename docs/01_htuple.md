@@ -128,7 +128,7 @@ also lets `size`, `rank`, `depth`, `shape`, and `stride` accept a mode-path the 
 This is the moral equivalent of `cute::shape<0>(A)` and `cute::size<1>(A)` in
 C++ CuTe.
 
-### `lift(obj, *, pad=0, mode=())`
+### `lift(obj, *, pad=0, make=tuple, mode=())`
 
 The dual of `get`. Inserts `obj` at a given path inside an empty
 zero-padded structure:
@@ -142,12 +142,42 @@ zero-padded structure:
 (None, 42)
 ```
 
-`lift` takes exactly one positional argument, the value: both `pad` and `mode`
-are keyword-only, so neither can be mistaken for the value being lifted.
+`make` builds each mode created, so `lift` also raises a `Layout` through the
+modes of a larger one, padding with the mode that goes nowhere:
+
+```python
+>>> lift[1](Layout(4, 2), pad=Layout(1, 0), make=make_layout)
+Layout((1, 4), (0, 2))
+```
+
+`lift` takes exactly one positional argument, the value: `pad`, `make` and
+`mode` are all keyword-only, so none can be mistaken for the value being lifted.
 
 `get[mode](lift[mode](x)) == x` always holds.
 
 (See [`test_htuple.py::TestGetLift::test_lift_round_trip`](../test/test_htuple.py).)
+
+### `replace(obj, x, *, mode=())`
+
+The counterpart of `get`: where `lift` builds a structure around a value,
+`replace` puts the value into a structure that is already there.
+
+```python
+>>> replace[1]((1, 2, 3), 42)
+(1, 42, 3)
+>>> replace[0, 2](((1, 2, 3), 4), 42)
+((1, 2, 42), 4)
+```
+
+`get[mode](replace[mode](obj, x)) == x` always holds, and naming a mode that
+`obj` does not have is a `ValueError` — unlike `lift`, which would create it.
+
+```python
+>>> replace[1](repeat_like(None, (3, 4)), Layout(2, 1))
+(None, Layout(2, 1))
+```
+
+(See [`test_htuple.py::TestGetLift`](../test/test_htuple.py).)
 
 ### `select(obj, *, mode=())`
 
@@ -365,7 +395,8 @@ to the mode at this path". PyCuTe expresses this uniformly with the
 * [`stride`](../pycute/stride.py): `stride(A)`, `stride[1](A)`.
 * [`coshape`](../pycute/stride.py) and `coprofile`.
 * [`get`](../pycute/htuple.py), [`lift`](../pycute/htuple.py),
-  [`select`](../pycute/htuple.py), and [`take`](../pycute/htuple.py).
+  [`replace`](../pycute/htuple.py), [`select`](../pycute/htuple.py), and
+  [`take`](../pycute/htuple.py).
 * [`coalesce`](../pycute/algebra.py) and `coalesce_z`: `coalesce[1](A)`.
 * [`composition`](../pycute/algebra.py): `composition[0](A, B)`.
 * [`logical_divide`](../pycute/algebra.py) and `zipped_divide`:

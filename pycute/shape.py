@@ -45,7 +45,7 @@ def rank(obj, *, mode=()) -> int:
 def depth(obj, *, mode=()) -> int:
   """Get an object's depth"""
   s = shape(obj, mode=mode)
-  return 1 + reduce(max, map(depth, s)) if is_tuple(s) else 0
+  return 1 + reduce(max, map(depth, s), 0) if is_tuple(s) else 0
 
 
 def compatible(a: Shape, b: Shape) -> bool:

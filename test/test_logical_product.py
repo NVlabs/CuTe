@@ -20,6 +20,8 @@ class TestLogicalProduct:
 
     assert rank(R) == 2
 
+    assert size(R) == size(A) * size(B)
+
     assert A == R[0]
 
     assert compatible(B, R[1])
@@ -165,14 +167,20 @@ class TestLogicalProduct:
 
 
   def test_logical_product_short_and_padded_tiler(self):
-    # A tuple B shorter than A leaves A's trailing modes untouched, and a None
-    # entry leaves its own mode untouched -- both spellings of "no copies here".
+    # B rewrites rather than selects -- every element of A is reproduced -- so a
+    # tuple B may run short: the modes it does not reach are simply not
+    # reproduced. Dropping them would discard data rather than tile it.
     for A in [Layout((6, 4), (4, 1)), (6, 4), (Layout(6, 2), Layout(4, 1))]:
       L = tiler_to_layout(A)
       assert logical_product(A, (Layout(2, 1),)) == make_layout([logical_product(L[0], Layout(2, 1)), L[1]])
       assert logical_product(A, (Layout(2, 1), None)) == logical_product(A, (Layout(2, 1),))
       assert logical_product(A, (None, Layout(2, 1))) == make_layout([L[0], logical_product(L[1], Layout(2, 1))])
       assert logical_product(A, (None, None)) == L
+      assert logical_product(A, ()) == L                 # reproduces nothing
+
+      for B, copies in [((Layout(2, 1),), 2), ((Layout(2, 1), None), 2),
+                        ((None, None), 1), ((), 1)]:
+        assert size(logical_product(A, B)) == size(L) * copies
 
     # B may not out-rank A
     with pytest.raises(ValueError):
