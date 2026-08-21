@@ -222,32 +222,33 @@ class Layout(LayoutBase):
       Ab = get(A, mode=basisB)
       result_s, result_d = list(wrap(Ab.shape)), list(wrap(Ab.stride))
 
-      # Truncate/extend result_s based on strideB * B.shape
-      result_s[-1] = strideB * B.shape
+      # "Divide out" the first strideB elements of A.
+      while len(result_s) > 1:
+        qDS, rDS = divmod(strideB, result_s[0])
+        if rDS != 0:
+          break
+        strideB = qDS                            # Step past a whole mode
+        result_s, result_d = result_s[1:], result_d[1:]
+
+      # Whatever is left of the stride, modify the head mode
+      result_d[0] *= strideB
+      if len(result_s) > 1:
+        qSD, rSD = divmod(result_s[0], strideB)
+        if rSD == 0 and qSD > 0:
+          result_s[0] = qSD
+        elif qSD < B.shape - 1:                  # It reaches past this mode's extent
+          raise ValueError(f"Stride divisibility condition violated: composition({self}, {B})")
+
+      # "Keep" the first B.shape elements of what remains.
+      result_s[-1] = B.shape
       for i in range(len(result_s)-1):
         result_s[-1], rES = divmod(result_s[-1], result_s[i])
-        if result_s[-1] == 0:
+        if result_s[-1] == 0:                    # This mode covers what is left
           result_s[i] = rES
-          result_s = result_s[:i+1]
-          result_d = result_d[:i+1]
+          result_s, result_d = result_s[:i+1], result_d[:i+1]
           break
         if rES != 0:
           raise ValueError(f"Shape divisibility condition violated: composition({self}, {B})")
-
-      # Remove result_s prefix strideB
-      for i in range(len(result_s)-1):
-        qSD, rSD = divmod(result_s[i], strideB)
-        if rSD == 0:
-          result_s[i]  = qSD
-          result_d[i] *= strideB
-          break
-        strideB, rDS = divmod(strideB, result_s[i])
-        result_s[i] = 1
-        if rDS != 0:
-          raise ValueError(f"Stride divisibility condition violated: composition({self}, {B})")
-      else:
-        result_s[-1] //= strideB
-        result_d[-1]  *= strideB
 
       # Accumulate into resultL
       resultL = layout_add(resultL, Layout._set(result_s, result_d))

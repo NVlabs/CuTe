@@ -72,6 +72,12 @@ class TestComposition:
 
     # Other
     self.postcondition_composition(Layout((5,5), (5,5)), Layout(5, 5))
+    self.postcondition_composition(Layout((5,3), (7,1)), Layout(2, 3))
+    assert composition(Layout((5,3), (7,1)), Layout(2, 3)) == Layout(2, 21)
+    self.postcondition_composition(Layout((5,5), (22,5)), Layout(3, 2))
+    assert composition(Layout((5,5), (22,5)), Layout(3, 2)) == Layout(3, 44)
+    self.postcondition_composition(Layout((5,5,5), (1,22,5)), Layout(3, 10))
+    assert composition(Layout((5,5,5), (1,22,5)), Layout(3, 10)) == Layout(3, 44)
     self.postcondition_composition(Layout(7, 11), Layout(3, 4))
     self.postcondition_composition(Layout(7, 11), Layout((3,5), (6,3)))
 
@@ -152,13 +158,23 @@ class TestComposition:
 
   def test_composition_fails(self):
 
-    # Violates stride divisibility condition
-    with pytest.raises(ValueError):
-      self.postcondition_composition(Layout((5,3), (7,1)), Layout(2,3))
-
     # Violates shape divisibility condition
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Shape divisibility"):
       self.postcondition_composition(Layout((5,3), (7,1)), Layout(7,1))
+
+    # Which condition a violation is reported under is meaningful, so pin the
+    # Whitepaper's own examples. The first two cannot represent every third
+    # element and every element respectively; of the last two, one cannot be
+    # sufficiently truncated and the other cannot be coalesced.
+    with pytest.raises(ValueError, match="Stride divisibility"):
+      composition(Layout((4,6,8), (2,3,5)), Layout(6,3))
+    with pytest.raises(ValueError, match="Shape divisibility"):
+      composition(Layout((4,6,8), (2,3,5)), Layout(6,1))
+    assert composition(Layout((4,2,8), (3,12,97)), Layout(3,3)) == Layout(3, 9)
+    with pytest.raises(ValueError, match="Stride divisibility"):
+      composition(Layout((4,2,8), (3,12,97)), Layout(4,3))
+    with pytest.raises(ValueError, match="Stride divisibility"):
+      composition(Layout((4,2,8), (3,15,97)), Layout(3,3))
 
   def test_composition_coords(self):
     # LHS Coords
@@ -261,5 +277,5 @@ class TestComposition:
     # unverifiable divisibility condition, so composition must raise rather
     # than emit a silently-unchecked symbolic result.
     N, X, Y = sympy.symbols("N X Y", positive=True, integer=True)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Shape divisibility"):
       composition(Layout((N, 8), (X, Y)), Layout(4, 1))
