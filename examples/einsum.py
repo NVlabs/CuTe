@@ -1,31 +1,16 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""
+Evaluate binary tensor contractions by folding them into a batched GEMM.
+
+Each label of an explicit einsum equation is classified by where it appears --
+row, column, reduction or batch -- and each operand is then viewed, never
+copied, as the canonical rank-3 layout that `pycute.alg.ref.gemm` consumes.
+"""
+
 from pycute import *
-
-
-def batch_gemm(A : Tensor,   # (M,K,L)
-               B : Tensor,   # (N,K,L)
-               C : Tensor):  # (M,N,L)
-  """
-  A generic batch GEMM operation.
-  """
-  if rank(A) != 3 or rank(B) != 3 or rank(C) != 3:
-    raise ValueError("batch_gemm: operands must be rank-3")
-  if size[0](A) != size[0](C):
-    raise ValueError("Row sizes M do not match")
-  if size[0](B) != size[1](C):
-    raise ValueError("Column sizes N do not match")
-  if size[1](A) != size[1](B):
-    raise ValueError("Reduction sizes K do not match")
-  if size[2](A) != size[2](B) != size[2](C):
-    raise ValueError("Batch sizes L do not match")
-
-  for l in range(size[2](C)):
-    for k in range(size[1](B)):
-      for n in range(size[1](C)):
-        for m in range(size[0](C)):
-          C[m,n,l] += A[m,k,l] * B[n,k,l]
+from pycute.alg.ref import gemm
 
 
 def _fold(tensor : Tensor, labels, groups) -> Tensor:
@@ -46,13 +31,13 @@ def _fold(tensor : Tensor, labels, groups) -> Tensor:
 
 def einsum(subscripts : str, A : Tensor, B : Tensor, C : Tensor) -> Tensor:
   """
-  Evaluate an explicit binary einsum by folding into `batch_gemm`.
+  Evaluate an explicit binary einsum by folding into `pycute.alg.ref.gemm`.
 
   `subscripts` has the form "a_modes,b_modes->c_modes" with one label per mode
   (e.g. "stupr,qtru->stqp"). Each label is classified as a row (M, in A and C),
   column (N, in B and C), reduction (K, in A and B), or batch (L, in A, B and C)
   mode, and the operands are folded -- a zero-copy change of view -- into the
-  canonical  A:(M,K,L)  B:(N,K,L)  C:(M,N,L)  layouts that `batch_gemm` consumes.
+  canonical  A:(M,K,L)  B:(N,K,L)  C:(M,N,L)  layouts that `gemm` consumes.
 
   The result accumulates into the caller-provided `C` (`C += A * B`); einsum
   never allocates or zeroes `C`, so zero `C` beforehand for assignment semantics.
@@ -97,5 +82,5 @@ def einsum(subscripts : str, A : Tensor, B : Tensor, C : Tensor) -> Tensor:
   B3 = _fold(B, b_mode, (col, red, bat))   # (N,K,L)
   C3 = _fold(C, c_mode, (row, col, bat))   # (M,N,L)
 
-  batch_gemm(A3, B3, C3)                   # C += A * B
+  gemm(A3, B3, C3)                         # C += A * B
   return C

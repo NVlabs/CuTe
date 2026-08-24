@@ -4,5 +4,6 @@
 """Reference (naive) algorithms over PyCuTe Tensors."""
 
 from .copy import copy
+from .gemm import gemm
 
-__all__ = ["copy"]
+__all__ = ["copy", "gemm"]

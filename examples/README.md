@@ -62,7 +62,8 @@ pytest examples/einfold_test.py
 ## `einsum.py`
 
 Implements a minimal binary `einsum` by folding a tensor contraction into the
-reference `batch_gemm` primitive. Given
+reference batched GEMM,
+[`pycute.alg.ref.gemm`](../pycute/alg/ref/gemm.py). Given
 `einsum("a_modes,b_modes->c_modes", A, B, C)`, labels are classified as row
 (`M`), column (`N`), reduction (`K`), or batch (`L`) modes, then viewed as the
 canonical `A:(M,K,L)`, `B:(N,K,L)`, and `C:(M,N,L)` layouts.

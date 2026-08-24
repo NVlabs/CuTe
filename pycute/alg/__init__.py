@@ -9,6 +9,7 @@ and prototyping — not device kernels.
 
 * `pycute.alg.copy` — optimized COPY (may fall back to the reference)
 * `pycute.alg.ref.copy` — reference / naive COPY
+* `pycute.alg.ref.gemm` — reference / naive batched GEMM
 """
 
 from .copy import copy
