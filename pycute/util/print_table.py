@@ -34,7 +34,10 @@ def print_table(tensor : Union[Tensor, LayoutBase], print_type=True):
       "Install it with `pip install tabulate` or `pip install pycute[viz]`."
     ) from e
 
-  if rank(tensor) == 2:
+  if rank(tensor) == 1:
+    data = [[tensor[m] for m in range(size[0](tensor))]]
+    print(tabulate(data, tablefmt="grid"))
+  elif rank(tensor) == 2:
     data = [[tensor[m,n] for n in range(size[1](tensor))] for m in range(size[0](tensor))]
     print(tabulate(data, tablefmt="grid"))
   else:

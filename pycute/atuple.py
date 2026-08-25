@@ -273,12 +273,15 @@ class ArithTuple(StrideScalar):
   # Pretty printing
   # ------------------------------------------------------------------
 
+  def __format__(self, spec):
+    return format(str(self), spec)
+
   def __str__(self):
     rep = basis_repr(self)
     if len(rep) == 1:
       value, mode = rep[0]
       return "@".join(str(t) for t in (value,) + mode[::-1])
-    return "(" + ", ".join(str(c) for c in self.data) + ")"
+    return "(" + ",".join(str(c) for c in self.data) + ")"
 
   def __repr__(self):
     return str(self)
