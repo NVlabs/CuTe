@@ -263,10 +263,10 @@ def idx2crd(idx: Coord, shape: Shape) -> Coord:
   if is_int(shape) and is_int(idx):      # Identity
     return idx
   if is_tuple(shape):
-    if is_tuple(idx):                    # tuple tuple
+    if is_tuple(idx):                    # idx: tuple, shape: tuple
       if len(idx) != len(shape): raise ValueError(f"Incompatible rank: idx2crd({idx}, {shape})")
       return tuple(idx2crd(i,s) for i,s in zip(idx,shape))
-    if is_int(idx):                      # "int" tuple
+    if is_int(idx):                      # idx: int, shape: tuple
       def divmod_seq(idx):
         for s in flatten(shape)[:-1]:
           idx,rem = divmod(idx,s)        # (idx // s, idx % s)
