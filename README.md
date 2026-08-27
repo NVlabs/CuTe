@@ -1,3 +1,7 @@
+<p align="center">
+<img src="docs/images/cute_logo.png" alt="CuTe: the A, B and C thread-value layouts of an SM70 8x8x4 MMA Atom" width="380">
+</p>
+
 # PyCuTe
 
 **A pure-Python reference implementation of CuTe — the hierarchical
