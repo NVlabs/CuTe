@@ -167,29 +167,32 @@ class TestCoalesce:
 
 
   def test_coalesce_sympy(self):
-    # Concrete shapes still merge through symbolic strides: no concrete shape
-    # is folded into a symbol, and the size stays concrete so the full
-    # pointwise post-condition applies.
+    # Concrete shapes merge through symbolic strides. Every shape here is
+    # concrete, so the size is too and the full pointwise post-condition applies.
     X = sympy.symbols("X", positive=True, integer=True)
     self.postcondition_coalesce(Layout((2, 4), (X, 2*X)))         # -> 8:X
     self.postcondition_coalesce(Layout((2, 3, 4), (X, 2*X, 6*X))) # -> 24:X
     self.postcondition_coalesce(Layout((2, 4), (X, 3*X)))         # no merge
 
 
-  def test_coalesce_sympy_static(self):
-    # The merge folds two shapes into the product ``s_a*s_b``, so a concrete
-    # shape must NOT merge into a symbolic one (which would bury e.g. 4 inside
-    # 4*N). Two symbolic shapes may still merge. Symbolic shapes give a
-    # symbolic size (no iteration), so assert the coalesced form directly.
+  def test_coalesce_sympy_shapes(self):
+    # The merge replaces the pair ``(s_a, s_b)`` with the single extent
+    # ``s_a*s_b``, which a symbolic shape records as faithfully as a concrete
+    # one, so a symbol is no barrier to merging. Symbolic shapes give a symbolic
+    # size (no iteration), so assert the coalesced form directly.
     N, M, X, Y = sympy.symbols("N M X Y", positive=True, integer=True)
 
-    # Blocked: a concrete and a symbolic shape stay separate.
-    assert coalesce(Layout((4, N), (1, 4))) == Layout((4, N), (1, 4))
-    assert coalesce(Layout((N, 4), (1, N))) == Layout((N, 4), (1, N))
-    assert coalesce(Layout((2, N), (1, 2))) == Layout((2, N), (1, 2))
-
-    # Allowed: two symbolic shapes merge.
+    # A symbol merges on either side of the pair, and with a symbol or a
+    # concrete extent opposite it.
+    assert coalesce(Layout((4, N), (1, 4))) == Layout(4*N, 1)
+    assert coalesce(Layout((N, 4), (1, N))) == Layout(4*N, 1)
+    assert coalesce(Layout((2, N), (1, 2))) == Layout(2*N, 1)
     assert coalesce(Layout((N, M), (1, N))) == Layout(N*M, 1)
+
+    # Merging is order-independent even where the product is rewritten on the
+    # way in: both of these form ``(N+1)*2``, which distributes to ``2*N + 2``.
+    assert coalesce(Layout((N+1, 2), (1, N+1))) == Layout(2*N+2, 1)
+    assert coalesce(Layout((2, N+1), (1, 2)))   == Layout(2*N+2, 1)
 
     # Unrelated strides do not merge; a size-1 mode still drops.
     assert coalesce(Layout((N, M), (X, Y))) == Layout((N, M), (X, Y))

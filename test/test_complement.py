@@ -107,8 +107,9 @@ class TestComplement:
     # A symbolic-stride mode is processed after the sorted static gaps; here
     # it resolves cleanly because the layout is contiguous.
     assert complement(Layout((N, 4), (1, N))) == Layout(1, 4*N)
-    # The extend works with trailing symbolic extents
-    assert Layout(256, 1)._complement(extend=(32,4,2,2,N)) == Layout((2,N), (256,512))
+    # The extend works with trailing symbolic extents, which coalesce with the
+    # concrete ones ahead of them.
+    assert Layout(256, 1)._complement(extend=(32,4,2,2,N)) == Layout(2*N, 256)
 
   def test_complement_sympy_substitution(self):
     # The symbolic complement must agree with the concrete complement under

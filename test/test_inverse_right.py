@@ -156,16 +156,17 @@ class TestRightInverse:
     N, M, X, DM, DN = sympy.symbols("N M X DM DN", positive=True, integer=True)
 
     assert right_inverse(Layout(N, 1)) == Layout(N, 1)
-    assert right_inverse(Layout((4, N), (1, 4))) == Layout((4, N), (1, 4))
+    assert right_inverse(Layout((4, N), (1, 4))) == Layout(4*N, 1)
     assert right_inverse(Layout((N, M), (1, N))) == Layout(N*M, 1)
 
     # A strided (non-surjective) symbolic layout has only the trivial inverse.
     assert right_inverse(Layout(N, X)) == Layout(1, 0)
 
     # Symbolic strides that can't be ordered are deprioritized past the sort and
-    # ignored; a symbolic stride that continues the chain is still kept.
+    # ignored; a symbolic stride that continues the chain is still kept, and the
+    # recovered modes then coalesce.
     assert right_inverse(Layout((M, N), (DM, DN))) == Layout(1, 0)
-    assert right_inverse(Layout((N, 4), (1, N))) == Layout((N, 4), (1, N))
+    assert right_inverse(Layout((N, 4), (1, N))) == Layout(4*N, 1)
 
   def test_right_inverse_sympy_substitution(self):
     # Substituting concrete values into each symbolic right inverse must yield

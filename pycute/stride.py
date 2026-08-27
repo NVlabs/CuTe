@@ -134,12 +134,24 @@ def _coalesce_z(shape: Shape, stride: Stride) -> tuple[Shape, Stride]:
   Return a new shape and stride that are coalesced equivalents of the input.
   This is the size-1-preserving ("_z") core fold.
 
-  Two adjacent modes may be merged only when the merge preserves the 
-  layout's evaluation. The merge condition below verifies this with two 
-  O(1) checks that are jointly necessary and sufficient:
+  Merging adjacent modes `(s_a, s_b):(d_a, d_b)` into `s_a*s_b : d_a` must
+  preserve both what the layout evaluates to and what its shape records.
+  Evaluation is preserved exactly when the map stays linear across the pair,
+  which two O(1) checks decide -- jointly necessary and sufficient:
 
     1. `s_a*d_a == d_b`                       (linearity at `(0, 1)`)
     2. `(s_a-1)*d_a + d_b == (2*s_a-1)*d_a`   (linearity at `(s_a-1, 1)`)
+
+  The shape records the pair only if `s_a*s_b` is a value determined by its
+  factors, which a third check settles by forming the product twice:
+
+    3. `s_a*s_b == s_a*s_b`
+
+  For an `int` or a symbolic expression this holds by construction. It fails for
+  a leaf whose `*` mints a fresh opaque handle and compares by identity -- a
+  traced or JIT integer -- whose merged extent would record nothing the caller
+  can read back. (1) and (2) are cheaper still and reject nearly every pair, so
+  they run first and gate the two multiplications (3) costs.
 
   Pre-conditions:
     congruent(shape, stride)
@@ -152,10 +164,10 @@ def _coalesce_z(shape: Shape, stride: Stride) -> tuple[Shape, Stride]:
       result_d.pop()
     if result_s:
       s_a, d_a = result_s[-1], result_d[-1]
-      if (is_static(s_a) == is_static(s_b)                # Don't fold concrete into symbolic
-          and s_a * d_a == d_b
-          and (s_a - 1) * d_a + d_b == (2 * s_a - 1) * d_a):
-        result_s[-1] = s_a * s_b                          # Merge mergeable modes
+      if (s_a * d_a == d_b                                # Linearity at (0, 1)
+          and (s_a - 1) * d_a + d_b == (2 * s_a - 1) * d_a
+          and (s_ab := s_a * s_b) == s_a * s_b):          # Reject an opaque product
+        result_s[-1] = s_ab                               # Merge mergeable modes
         continue
     result_s.append(s_b)                                  # Else, Append
     result_d.append(d_b)

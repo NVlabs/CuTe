@@ -111,19 +111,42 @@ class TestCoalesceZ:
     self.postcondition_coalesce_z(Layout((2, 4), (X, 3*X)))         # no merge
 
 
-  def test_coalesce_z_sympy_static(self):
-    # ``coalesce_z`` shares the static/symbolic merge guard: a concrete shape
-    # must not merge into a symbolic one, while two symbolic shapes may merge.
+  def test_coalesce_z_sympy_shapes(self):
+    # ``coalesce_z`` shares the merge, and a symbolic extent records the product
+    # ``s_a*s_b`` as faithfully as a concrete one, so a symbol is no barrier.
     N, M, X, Y = sympy.symbols("N M X Y", positive=True, integer=True)
 
-    # Blocked: a concrete and a symbolic shape stay separate.
-    assert coalesce_z(Layout((4, N), (1, 4))) == Layout((4, N), (1, 4))
-    assert coalesce_z(Layout((N, 4), (1, N))) == Layout((N, 4), (1, N))
-    assert coalesce_z(Layout((2, N), (1, 2))) == Layout((2, N), (1, 2))
-
-    # Allowed: two symbolic shapes merge.
+    # A symbol merges on either side of the pair, and with a symbol or a
+    # concrete extent opposite it.
+    assert coalesce_z(Layout((4, N), (1, 4))) == Layout(4*N, 1)
+    assert coalesce_z(Layout((N, 4), (1, N))) == Layout(4*N, 1)
+    assert coalesce_z(Layout((2, N), (1, 2))) == Layout(2*N, 1)
     assert coalesce_z(Layout((N, M), (1, N))) == Layout(N*M, 1)
+
+    # Merging is order-independent even where the product is rewritten on the
+    # way in: both of these form ``(N+1)*2``, which distributes to ``2*N + 2``.
+    assert coalesce_z(Layout((N+1, 2), (1, N+1))) == Layout(2*N+2, 1)
+    assert coalesce_z(Layout((2, N+1), (1, 2)))   == Layout(2*N+2, 1)
 
     # Unrelated strides do not merge; a size-1 mode still drops.
     assert coalesce_z(Layout((N, M), (X, Y))) == Layout((N, M), (X, Y))
     assert coalesce_z(Layout((1, N), (X, Y))) == Layout(N, Y)
+
+
+  def test_coalesce_z_opaque_shape(self):
+    # A leaf whose ``*`` mints a fresh node and compares by identity -- a traced
+    # or JIT integer -- cannot record a merged extent: ``s_a*s_b`` would name a
+    # value nobody can read back. The merge forms the product twice and refuses
+    # when the two disagree, so the modes stay split even though the strides are
+    # concrete and satisfy both linearity conditions.
+    class Handle:
+      def __mul__(self, other):  return Handle()
+      __rmul__ = __mul__
+    register_integer_type(Handle)
+
+    L = Layout((4, Handle()), (1, 4))
+    assert coalesce_z(L) == L
+    assert coalesce(L) == L
+
+    # The same leaf in a size-1 mode is dropped, not merged.
+    assert coalesce(Layout((1, 4), (Handle(), 1))) == Layout(4, 1)
