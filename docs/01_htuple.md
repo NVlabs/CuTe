@@ -236,10 +236,11 @@ Small helpers used pervasively in the implementation:
 
 These functions are the workhorses inside the layout algebra.
 
-### `leaves(t)` and `flatten(t, g=tuple)`
+### `leaves(htuple)` and `flatten(htuple, make=tuple)`
 
-`leaves(t)` is a generator over the leaf elements of `t` in left-to-right
-order. `flatten(t, g=tuple)` materializes that generator with a builder:
+`leaves(htuple)` is a generator over the leaf elements of `htuple` in
+left-to-right order. `flatten(htuple, make=tuple)` materializes that generator
+with a builder:
 
 ```python
 >>> list(leaves(((1, (2, 3)), 4)))
@@ -248,9 +249,9 @@ order. `flatten(t, g=tuple)` materializes that generator with a builder:
 (1, 2, 3, 4)
 ```
 
-## Traversal: `leaves`, `flatten`, `unflatten`, `transform_leaf`
+### `unflatten(values, profile, make=tuple)`
 
-The inverse of `flatten`: pull values from `iter` to fill in the same
+The inverse of `flatten`: pull leaves from `values` to fill in the same
 profile as `profile`:
 
 ```python
@@ -258,9 +259,9 @@ profile as `profile`:
 ((10, (20, 30)), 40)
 ```
 
-### `transform_leaf(f, *tuples)`
+### `transform_leaf(fn, *tuples)`
 
-Apply `f` to each tuple of corresponding leaves and rebuild the structure:
+Apply `fn` to each tuple of corresponding leaves and rebuild the structure:
 
 ```python
 >>> transform_leaf(lambda a: a * 2, ((1, (2, 3)), 4))
@@ -272,9 +273,9 @@ Apply `f` to each tuple of corresponding leaves and rebuild the structure:
 ```
 
 There is also a more general
-`transform_apply_leaf(g, f, htuple, *tuples)` that lets you supply both a
-leaf transformer `f` and a reduction `g` (the default `g=tuple` rebuilds the
-structure; `g=make_layout` builds layouts).
+`transform_apply_leaf(make, fn, htuple, *tuples)` that lets you supply both a
+leaf transformer `fn` and a node builder `make` (`make=tuple` rebuilds the
+structure; `make=make_layout` builds layouts).
 
 (See [`test_htuple.py::TestTransformLeaf`](../test/test_htuple.py).)
 
@@ -294,9 +295,9 @@ for `flatten`/`unflatten`/`repeat_like` round-trip examples.)
 
 PyCuTe's arithmetic over `HTuple`s is identical to C++ CuTe's.
 
-### `product(a)`
+### `product(s)`
 
-The product of all leaves of `a`:
+The product of all leaves of `s`:
 
 ```python
 >>> product(2)
@@ -309,10 +310,10 @@ The product of all leaves of `a`:
 
 (See [`test_htuple.py::TestHTuple::test_product`](../test/test_htuple.py).)
 
-### `product_each(a)`
+### `product_each(s)`
 
 The product *of each top-level mode* — returns a flat tuple of the same
-top-level rank as `a`, where each entry is the product of the
+top-level rank as `s`, where each entry is the product of the
 corresponding mode's leaves. Useful for collapsing a hierarchical shape
 into the flat shape that has the same per-mode size.
 

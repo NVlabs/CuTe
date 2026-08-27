@@ -14,6 +14,7 @@ a path of indices into that tree, and every function taking one is
 subscriptable, so `get[0, 2](x)` is `get(x, mode=(0, 2))`.
 """
 
+from collections.abc import Iterator
 from functools import reduce, update_wrapper
 import operator
 from itertools import zip_longest
@@ -199,7 +200,7 @@ def get(obj: HTuple, *, mode=()) -> HTuple:
 
 
 @ModeOpDecorator
-def lift(obj, *, pad=0, make=tuple, mode=()):
+def lift(obj: HTuple, *, pad=0, make=tuple, mode=()) -> HTuple:
   """
   Create an object with `obj` as the `mode`-th element.
 
@@ -225,7 +226,7 @@ def lift(obj, *, pad=0, make=tuple, mode=()):
 
 
 @ModeOpDecorator
-def replace(obj, x, *, mode=()):
+def replace(obj: HTuple, x: HTuple, *, mode=()) -> HTuple:
   """
   Create a copy of `obj` with its `mode`-th element replaced by `x`.
 
@@ -250,7 +251,7 @@ def replace(obj, x, *, mode=()):
 
 
 @ModeOpDecorator
-def select(obj, *, mode=()):
+def select(obj: HTuple, *, mode=()) -> tuple:
   """
   Select the modes of `obj` named by `mode`, in the order given, as a tuple.
 
@@ -270,7 +271,7 @@ def select(obj, *, mode=()):
 
 
 @ModeOpDecorator
-def take(obj, *, mode=()):
+def take(obj: HTuple, *, mode=()) -> tuple:
   """
   Select the modes of `obj` in the half-open range `[mode[0], mode[1])`.
 
@@ -292,14 +293,14 @@ def take(obj, *, mode=()):
   return select(obj, mode=tuple(i for i in range(mode[0], mode[1])))
 
 
-def transform_apply_leaf(g, f, htuple, *tuples):
+def transform_apply_leaf(make, fn, htuple: HTuple, *tuples: HTuple) -> HTuple:
   """
-  Rebuild `htuple` with `f` applied at every leaf and `g` at every node:
-  `transform_apply_leaf(g, f, t...) == g(f(t)...)`.
+  Rebuild `htuple` with `fn` applied at every leaf and `make` at every node:
+  `transform_apply_leaf(make, fn, t...) == make(fn(t)...)`.
 
   Args:
-    g: Builds one node of the result from an iterable of its children
-    f: Maps the corresponding leaves of every input to one leaf of the result
+    make: Builds one node of the result from an iterable of its children
+    fn: Maps the corresponding leaves of every input to one leaf of the result
     htuple: The HTuple whose tree the result follows
     *tuples: Further HTuples walked alongside `htuple`
 
@@ -312,15 +313,15 @@ def transform_apply_leaf(g, f, htuple, *tuples):
     transform_apply_leaf(make_layout, Layout, (2, 3), (1, 4))  == Layout((2, 3), (1, 4))
   """
   if is_tuple(htuple):
-    return g(transform_apply_leaf(g, f, *items) for items in zip_longest(htuple, *tuples))
-  return f(htuple, *tuples)
+    return make(transform_apply_leaf(make, fn, *items) for items in zip_longest(htuple, *tuples))
+  return fn(htuple, *tuples)
 
 
-def transform_leaf(f, *tuples):
+def transform_leaf(fn, *tuples: HTuple) -> HTuple:
   """
-  Apply `f` at every leaf, rebuilding the tree with plain tuples.
+  Apply `fn` at every leaf, rebuilding the tree with plain tuples.
 
-  `transform_apply_leaf` with `g=tuple`, which is the common case.
+  `transform_apply_leaf` with `make=tuple`, which is the common case.
 
   Post-conditions:
     congruent(result, tuples[0])
@@ -329,25 +330,25 @@ def transform_leaf(f, *tuples):
     transform_leaf(lambda x: x + 1, (1, (2, 3)))       == (2, (3, 4))
     transform_leaf(lambda x, y: x * y, (2, 3), (5, 7)) == (10, 21)
   """
-  return transform_apply_leaf(tuple, f, *tuples)
+  return transform_apply_leaf(tuple, fn, *tuples)
 
 
-def leaves(t: HTuple):
+def leaves(htuple: HTuple) -> Iterator:
   """
-  Generate the leaves of `t`, left to right.
+  Generate the leaves of `htuple`, left to right.
 
   Examples:
     tuple(leaves(((2, 3), 4)))  == (2, 3, 4)
     tuple(leaves(42))           == (42,)
     tuple(leaves(()))           == ()
   """
-  if is_tuple(t):
-    for x in t: yield from leaves(x)
+  if is_tuple(htuple):
+    for x in htuple: yield from leaves(x)
   else:
-    yield t
+    yield htuple
 
 
-def zip_leaves(htuple, *tuples):
+def zip_leaves(htuple: HTuple, *tuples: HTuple) -> Iterator[tuple]:
   """
   Generate the corresponding leaves of every input, as tuples.
 
@@ -369,9 +370,9 @@ def zip_leaves(htuple, *tuples):
     yield (htuple, *tuples)
 
 
-def fold_leaf(fn, v, *tuples):
+def fold_leaf(fn, init, *tuples: HTuple):
   """
-  Left-fold `fn` over the corresponding leaves of `*tuples`, starting from `v`.
+  Left-fold `fn` over the corresponding leaves of `*tuples`, starting from `init`.
 
   Pre-conditions:
     weakly_congruent(tuples[0], t) for every t in tuples
@@ -380,36 +381,38 @@ def fold_leaf(fn, v, *tuples):
     fold_leaf(lambda acc, x: acc + x, 0, (1, (2, 3)))           == 6
     fold_leaf(lambda acc, x, y: acc + x * y, 0, (2, 3), (5, 7)) == 31
   """
-  [v := fn(v, *t) for t in zip_leaves(*tuples)]
-  return v
+  acc = init
+  for leaf in zip_leaves(*tuples):
+    acc = fn(acc, *leaf)
+  return acc
 
 
-def flatten(t: HTuple, g=tuple) -> HTuple:
+def flatten(htuple: HTuple, make=tuple) -> HTuple:
   """
-  Collect the leaves of `t` into one flat `g`, discarding the tree.
+  Collect the leaves of `htuple` into one flat `make`, discarding the tree.
 
   Post-conditions:
     depth(result) <= 1
-    unflatten(iter(flatten(t)), t) == t
+    unflatten(iter(flatten(htuple)), htuple) == htuple
 
   Examples:
     flatten(((2, 3), 4))                          == (2, 3, 4)
     flatten(42)                                   == (42,)
     flatten((Layout(2), Layout(3)), make_layout)  == Layout((2, 3), (1, 1))
   """
-  return g(leaves(t))
+  return make(leaves(htuple))
 
 
-def unflatten(iter, profile: Profile, g=tuple) -> HTuple:
+def unflatten(values: Iterator, profile: Profile, make=tuple) -> HTuple:
   """
   Rebuild `profile`'s tree from a flat iterator of leaves; inverse of `flatten`.
 
   Pre-conditions:
-    `iter` yields at least as many values as `profile` has leaves
+    `values` yields at least as many items as `profile` has leaves
 
   Post-conditions:
     congruent(result, profile)
-    unflatten(iter(flatten(t)), t) == t
+    unflatten(iter(flatten(htuple)), htuple) == htuple
 
   Examples:
     unflatten(iter([2, 3, 4]), ((0, 0), 0))  == ((2, 3), 4)
@@ -417,8 +420,8 @@ def unflatten(iter, profile: Profile, g=tuple) -> HTuple:
     unflatten(iter([2, 3]), (0, 0), list)    == [2, 3]
   """
   if is_tuple(profile):
-    return g(unflatten(iter,p,g) for p in profile)
-  return next(iter)
+    return make(unflatten(values,p,make) for p in profile)
+  return next(values)
 
 
 def repeat_like(x, profile: Profile) -> HTuple:
@@ -436,46 +439,40 @@ def repeat_like(x, profile: Profile) -> HTuple:
   return unflatten(iter(lambda: x, -1), profile)
 
 
-def product(a: HTuple):
+def product(s: HTuple):
   """
-  Multiply every leaf of `a` together.
+  Multiply every leaf of `s` together.
 
   Examples:
     product(((2, 3), 4))  == 24
     product(42)           == 42
     product(())           == 1
   """
-  return reduce(operator.mul, leaves(a), 1)
+  return reduce(operator.mul, leaves(s), 1)
 
 
-def product_each(a: HTuple) -> tuple:
+def product_each(s: HTuple) -> tuple:
   """
-  The `product` of each top-level mode of `a`, as a flat tuple.
+  The `product` of each top-level mode of `s`, as a flat tuple.
 
   Post-conditions:
-    len(result) == len(a)
-    product(result) == product(a)
+    len(result) == len(s)
+    product(result) == product(s)
 
   Examples:
     product_each(((2, 3), 4, (5, 6)))  == (6, 4, 30)
     product_each((2, 3))               == (2, 3)
     product_each(())                   == ()
   """
-  return tuple(product(x) for x in a)
+  return tuple(product(x) for x in s)
 
 
-def slice_(htuple: Profile, B: HTuple, g=tuple) -> HTuple:
+def slice_(htuple: Profile, B: HTuple, make=tuple) -> HTuple:
   """
-  Collect into `g` the leaves of `B` whose counterpart in `htuple` is `None`.
-
-  `htuple` is a coordinate whose `None` entries mark the modes a slice keeps,
-  while `dice_` gathers the rest to evaluate as the slice's offset.
+  Collect the leaves of `B` whose counterpart in `htuple` is `None`.
 
   Pre-conditions:
     weakly_congruent(htuple, B)
-
-  Post-conditions:
-    the leaves of slice_ and dice_ partition the leaves of B
 
   Examples:
     slice_((None, 1), ((2, 3), (5, 7, 9)))                 == ((2, 3),)
@@ -483,12 +480,12 @@ def slice_(htuple: Profile, B: HTuple, g=tuple) -> HTuple:
     slice_((1, 2), (5, 7))                                 == ()
     slice_((None, 1), (Layout(4), Layout(8)), make_layout) == Layout((4,), (1,))
   """
-  return g(b for a,b in zip_leaves(htuple,B) if a is None)
+  return make(b for a,b in zip_leaves(htuple,B) if a is None)
 
 
-def dice_(htuple: Profile, B: HTuple, g=tuple) -> HTuple:
+def dice_(htuple: Profile, B: HTuple, make=tuple) -> HTuple:
   """
-  Collect into `g` the leaves of `B` whose counterpart in `htuple` is not `None`.
+  Collect the leaves of `B` whose counterpart in `htuple` is not `None`.
 
   Pre-conditions:
     weakly_congruent(htuple, B)
@@ -498,4 +495,4 @@ def dice_(htuple: Profile, B: HTuple, g=tuple) -> HTuple:
     dice_((None, None), (2, 3))            == ()
     dice_((1, 2), (5, 7))                  == (5, 7)
   """
-  return g(b for a,b in zip_leaves(htuple,B) if a is not None)
+  return make(b for a,b in zip_leaves(htuple,B) if a is not None)

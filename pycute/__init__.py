@@ -16,8 +16,9 @@ from .tensor import *
 # stdlib names pulled in transitively by the `import *` chains (`reduce`,
 # `zip_longest`, `ABC`, etc.). New PyCuTe definitions are picked up automatically.
 import types as _types
-_INCIDENTAL = {"annotations", "ABC", "abstractmethod", "Iterable", "Union",
-               "Any", "TypeAlias", "reduce", "update_wrapper", "zip_longest"}
+_INCIDENTAL = {"annotations", "ABC", "abstractmethod", "Iterable", "Iterator",
+               "Union", "Any", "TypeAlias", "reduce", "update_wrapper",
+               "zip_longest"}
 __all__ = sorted(
     _n for _n, _v in globals().items()
     if not _n.startswith("_")

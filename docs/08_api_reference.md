@@ -306,15 +306,15 @@ take[2, 1](A)     -> ValueError
 take[1, 2, 3](A)  -> ValueError
 ```
 
-### `transform_apply_leaf(g, f, htuple, *tuples)`
+### `transform_apply_leaf(make, fn, htuple, *tuples)`
 
-Rebuild `htuple` with `f` applied at every leaf and `g` at every node:
-`transform_apply_leaf(g, f, t...) == g(f(t)...)`.
+Rebuild `htuple` with `fn` applied at every leaf and `make` at every node:
+`transform_apply_leaf(make, fn, t...) == make(fn(t)...)`.
 
 *Args:*
 
-g: Builds one node of the result from an iterable of its children
-f: Maps the corresponding leaves of every input to one leaf of the result
+make: Builds one node of the result from an iterable of its children
+fn: Maps the corresponding leaves of every input to one leaf of the result
 htuple: The HTuple whose tree the result follows
 *tuples: Further HTuples walked alongside `htuple`
 
@@ -332,11 +332,11 @@ transform_apply_leaf(sum, lambda x: x, (1, (2, 3)))        == 6
 transform_apply_leaf(make_layout, Layout, (2, 3), (1, 4))  == Layout((2, 3), (1, 4))
 ```
 
-### `transform_leaf(f, *tuples)`
+### `transform_leaf(fn, *tuples)`
 
-Apply `f` at every leaf, rebuilding the tree with plain tuples.
+Apply `fn` at every leaf, rebuilding the tree with plain tuples.
 
-`transform_apply_leaf` with `g=tuple`, which is the common case.
+`transform_apply_leaf` with `make=tuple`, which is the common case.
 
 *Post-conditions:*
 
@@ -351,9 +351,9 @@ transform_leaf(lambda x: x + 1, (1, (2, 3)))       == (2, (3, 4))
 transform_leaf(lambda x, y: x * y, (2, 3), (5, 7)) == (10, 21)
 ```
 
-### `leaves(t)`
+### `leaves(htuple)`
 
-Generate the leaves of `t`, left to right.
+Generate the leaves of `htuple`, left to right.
 
 *Examples:*
 
@@ -385,9 +385,9 @@ list(zip_leaves((1, 2), (3, 4), (5, 6)))    == [(1, 3, 5), (2, 4, 6)]
 list(zip_leaves(1, (2, 3)))                 == [(1, (2, 3))]
 ```
 
-### `fold_leaf(fn, v, *tuples)`
+### `fold_leaf(fn, init, *tuples)`
 
-Left-fold `fn` over the corresponding leaves of `*tuples`, starting from `v`.
+Left-fold `fn` over the corresponding leaves of `*tuples`, starting from `init`.
 
 *Pre-conditions:*
 
@@ -402,15 +402,15 @@ fold_leaf(lambda acc, x: acc + x, 0, (1, (2, 3)))           == 6
 fold_leaf(lambda acc, x, y: acc + x * y, 0, (2, 3), (5, 7)) == 31
 ```
 
-### `flatten(t, g=tuple)`
+### `flatten(htuple, make=tuple)`
 
-Collect the leaves of `t` into one flat `g`, discarding the tree.
+Collect the leaves of `htuple` into one flat `make`, discarding the tree.
 
 *Post-conditions:*
 
 ```
 depth(result) <= 1
-unflatten(iter(flatten(t)), t) == t
+unflatten(iter(flatten(htuple)), htuple) == htuple
 ```
 
 *Examples:*
@@ -421,21 +421,21 @@ flatten(42)                                   == (42,)
 flatten((Layout(2), Layout(3)), make_layout)  == Layout((2, 3), (1, 1))
 ```
 
-### `unflatten(iter, profile, g=tuple)`
+### `unflatten(values, profile, make=tuple)`
 
 Rebuild `profile`'s tree from a flat iterator of leaves; inverse of `flatten`.
 
 *Pre-conditions:*
 
 ```
-`iter` yields at least as many values as `profile` has leaves
+`values` yields at least as many items as `profile` has leaves
 ```
 
 *Post-conditions:*
 
 ```
 congruent(result, profile)
-unflatten(iter(flatten(t)), t) == t
+unflatten(iter(flatten(htuple)), htuple) == htuple
 ```
 
 *Examples:*
@@ -464,9 +464,9 @@ repeat_like(None, (3, 4))         == (None, None)
 repeat_like(0, 42)                == 0
 ```
 
-### `product(a)`
+### `product(s)`
 
-Multiply every leaf of `a` together.
+Multiply every leaf of `s` together.
 
 *Examples:*
 
@@ -476,15 +476,15 @@ product(42)           == 42
 product(())           == 1
 ```
 
-### `product_each(a)`
+### `product_each(s)`
 
-The `product` of each top-level mode of `a`, as a flat tuple.
+The `product` of each top-level mode of `s`, as a flat tuple.
 
 *Post-conditions:*
 
 ```
-len(result) == len(a)
-product(result) == product(a)
+len(result) == len(s)
+product(result) == product(s)
 ```
 
 *Examples:*
@@ -495,23 +495,14 @@ product_each((2, 3))               == (2, 3)
 product_each(())                   == ()
 ```
 
-### `slice_(htuple, B, g=tuple)`
+### `slice_(htuple, B, make=tuple)`
 
-Collect into `g` the leaves of `B` whose counterpart in `htuple` is `None`.
-
-`htuple` is a coordinate whose `None` entries mark the modes a slice keeps,
-while `dice_` gathers the rest to evaluate as the slice's offset.
+Collect the leaves of `B` whose counterpart in `htuple` is `None`.
 
 *Pre-conditions:*
 
 ```
 weakly_congruent(htuple, B)
-```
-
-*Post-conditions:*
-
-```
-the leaves of slice_ and dice_ partition the leaves of B
 ```
 
 *Examples:*
@@ -523,9 +514,9 @@ slice_((1, 2), (5, 7))                                 == ()
 slice_((None, 1), (Layout(4), Layout(8)), make_layout) == Layout((4,), (1,))
 ```
 
-### `dice_(htuple, B, g=tuple)`
+### `dice_(htuple, B, make=tuple)`
 
-Collect into `g` the leaves of `B` whose counterpart in `htuple` is not `None`.
+Collect the leaves of `B` whose counterpart in `htuple` is not `None`.
 
 *Pre-conditions:*
 
@@ -1580,9 +1571,11 @@ other); otherwise a ValueError is raised.
 *Examples:*
 
 ```python
+from fractions import Fraction
 recast(Layout(24, 1), 8)          == Layout(3, 1)
 recast(Layout(24, 2), 4)          == Layout(12, 1)
 recast(Layout((4, 4), (4, 1)), 4) == Layout((4, 1), (1, 1))
+recast(Layout((4, 4), (4, 1)), Fraction(1,2)) == Layout((4, 8), (8, 1))
 ```
 
 ---
