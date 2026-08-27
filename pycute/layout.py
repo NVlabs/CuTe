@@ -571,9 +571,11 @@ def recast(layout: Layout, scale) -> Layout:
     other); otherwise a ValueError is raised.
 
   Examples:
+    from fractions import Fraction
     recast(Layout(24, 1), 8)          == Layout(3, 1)
     recast(Layout(24, 2), 4)          == Layout(12, 1)
     recast(Layout((4, 4), (4, 1)), 4) == Layout((4, 1), (1, 1))
+    recast(Layout((4, 4), (4, 1)), Fraction(1,2)) == Layout((4, 8), (8, 1))
   """
   def recast_elem(shape, stride):
     dd = proj(stride, stride)
