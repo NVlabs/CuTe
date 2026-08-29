@@ -653,10 +653,14 @@ table of integer and `Fraction` scales.)
 
 PyCuTe also exports two analysis helpers beyond the core Whitepaper algebra:
 
-* **`layout_add(A, B)`** — when `size(A) == size(B)`, return the unique
+* **`layout_add(A, B, profile=1)`** — when `size(A) == size(B)`, return the unique
   (coalesced) layout `R` with `R(i) == A(i) + B(i)` on `[0, size(A))`.
   Requires a common refinement of the coalesced shapes; raises `ValueError`
-  otherwise. See [`test_layout_add.py`](../test/test_layout_add.py).
+  otherwise. `profile` selects whole-layout (`1`) vs by-mode (tuple) layout addition. 
+  Taken whole, the sum is free to reshape the domain — a rank-2 `A`
+  can come back rank 1 — which preserves the map but not the modes; by-mode adds
+  each leaf independently and so keeps the rank structure.
+  See [`test_layout_add.py`](../test/test_layout_add.py).
 
 * **`greatest_common_domain(A, B)`** — depends only on `shape(A)` and
   `shape(B)`; returns a rank-1 layout whose shape/stride factorization records
@@ -698,7 +702,7 @@ The same pattern applies to `coalesce_z`, `composition`, `complement`,
 | `right_inverse(L)` | `Layout` | `L^‡(L(L^‡(k))) == L^‡(k)` |
 | `left_inverse(L)` | `Layout` | `L(L^†(L(k))) == L(k)` |
 | `nullspace(L)` | `Layout` | `L(R(i)) == 0` for every `i` |
-| `layout_add(A, B)` | `Layout` | `R(i) == A(i) + B(i)` when defined |
+| `layout_add(A, B, profile)` | `Layout` | `R(i) == A(i) + B(i)` when defined |
 | `greatest_common_domain(A, B)` | `Layout` | common shape factorization of `A`, `B` |
 | `recast(L, scale)` | `Layout` | layout rescaled to new element size |
 

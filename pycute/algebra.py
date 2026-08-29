@@ -468,7 +468,7 @@ def nullspace(A) -> Layout:
   raise TypeError(f"nullspace not supported for type {type(A)}")
 
 
-def layout_add(A: Layout, B: Layout) -> Layout:
+def layout_add(A: Layout, B: Layout, profile=1) -> Layout:
   """
   Add two Layouts coordinate-wise.
 
@@ -477,28 +477,40 @@ def layout_add(A: Layout, B: Layout) -> Layout:
       size(R) == size(A) == size(B)
       R(i)    == A(i) + B(i)        for i in range(size(R))
 
-  `A` and `B` need not be compatible.
-  The result `R` is also not required to be compatible with `A` or `B`.
+  When no such Layout `R` exists, a `ValueError` is raised.
 
-  When no such Layout 'R' exists, a `ValueError` is raised.
+  `profile` selects whole-layout (`1`) vs by-mode (tuple) layout addition.
+
+  Taken whole, `A` and `B` need not be compatible and neither need `R` be with either:
+  the sum reshapes the domain as it likes, so a rank-2 `A` can come back rank 1. The
+  map survives; the modes do not.
 
   Pre-conditions:
-    size(A) == size(B)
+    weakly_congruent(profile, shape(A))
+    weakly_congruent(profile, shape(B))
+    size(A) == size(B), at each leaf of profile
 
   Post-conditions:
-    size(result) == size(A)
+    weakly_congruent(profile, shape(result))
+    size(result) == size(A), at each leaf of profile
     result(i) == A(i) + B(i)   for i in range(size(result))
-    symmetric:  layout_add(A, B) == layout_add(B, A)
+    symmetric:  layout_add(A, B, p) == layout_add(B, A, p)
 
   Examples:
     layout_add(Layout(12, 1),          Layout(12, 1))          == Layout(12, 2)
     layout_add(Layout(5, 0),           Layout(5, 1))           == Layout(5, 1)
     layout_add(Layout((4, 3), (1, 4)), Layout((4, 3), (3, 1))) == Layout((4, 3), (4, 5))
-    layout_add(Layout((5, 3, 4), (1, 5, 15)),
-               Layout((10, 6),     (1, 10)))                   == Layout(60, 2)
+    layout_add(Layout((5,3,4), (1,5,15)), Layout((10,6), (1,10))) == Layout(60, 2)
+    A = Layout((4, 3), (1, 4))         # The same sum, whole and by-mode
+    layout_add(A, A)         == Layout(12, 2)
+    layout_add(A, A, (1, 1)) == Layout((4, 3), (2, 8))
   """
   if B is None: return A
   if A is None: return B
+  if is_tuple(profile):
+    if rank(A) != len(profile) or rank(B) != len(profile):
+      raise ValueError(f"layout_add({A}, {B}, {profile}): rank mismatch")
+    return make_layout(layout_add(a, b, p) for a, b, p in zip(A, B, profile))
   if not (is_layout(A) and is_layout(B)):
     raise TypeError(f"layout_add: arguments must be Layouts (got {type(A)} and {type(B)})")
   if not static_true(size(A) == size(B)):

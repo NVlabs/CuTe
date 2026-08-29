@@ -422,3 +422,101 @@ class TestLayoutAdd:
   #   B = Layout((3, 3), (F2(2), F2(4)))
   #   with pytest.raises(ValueError, match="post-condition violated"):
   #     layout_add(A, B)
+
+
+class TestLayoutAddProfile:
+  """
+  Adding by-mode, which keeps the rank structure both arguments came in with.
+
+  Whole-layout addition is free to refine the domain however the sum falls, so the
+  map survives but the modes do not -- and where the modes *mean* something, as the
+  axes of a coordinate space do, that loss is the whole difference between a layout
+  of that space and a layout of a flat index.
+  """
+
+  def test_by_mode_keeps_the_axes(self):
+    A = Layout((4, 3), (1, 4))
+    B = Layout((4, 3), (3, 1))
+    R = layout_add(A, B, (1, 1))
+    assert R == Layout((4, 3), (4, 5))
+    assert congruent(shape(A), shape(R))
+
+  def test_whole_layout_may_reshape_the_domain(self):
+    """The contrast: the same sum taken whole comes back on a domain of its own."""
+    A = Layout((4, 3), (1, 4))
+    by_mode = layout_add(A, A, (1, 1))
+    whole = layout_add(A, A)
+    assert by_mode == Layout((4, 3), (2, 8))
+    assert whole == Layout(12, 2)                  # rank 2 in, rank 1 out
+    assert congruent(shape(A), shape(by_mode))
+    assert not congruent(shape(A), shape(whole))
+    # The same map either way, read at the flat index the domain enumerates.
+    assert all(int(whole(i + 4 * j)) == int(by_mode(i, j))
+               for i in range(4) for j in range(3))
+
+  def test_by_mode_agrees_pointwise(self):
+    for A, B in ((Layout((4, 3), (1, 4)), Layout((4, 3), (3, 1))),
+                 (Layout((8, 8), (1, 8)), Layout((8, 8), (8, 1))),
+                 (Layout((5, 3), (3, 1)), Layout((5, 3), (1, 5)))):
+      R = layout_add(A, B, (1, 1))
+      assert all(int(R(i, j)) == int(A(i, j)) + int(B(i, j))
+                 for i in range(size(A[0])) for j in range(size(A[1])))
+
+  def test_by_mode_is_symmetric(self):
+    A = Layout((4, 3), (1, 4))
+    B = Layout((4, 3), (3, 1))
+    assert layout_add(A, B, (1, 1)) == layout_add(B, A, (1, 1))
+
+  def test_f2_by_mode_is_the_swizzle_it_should_be(self):
+    """Over `F2` the sum is an XOR, and by-mode keeps it a layout of the tile."""
+    tile = Layout((8, 64), (F2(64), F2(1)))
+    corr = Layout((8, 64), (F2(8), F2(0)))
+    R = layout_add(tile, corr, (1, 1))
+    assert R == Layout((8, 64), (F2(72), F2(1)))
+    assert all(int(R(m, k)) == (64 * m) ^ (8 * m) ^ k
+               for m in range(8) for k in range(64))
+
+  def test_the_profile_conditions_are_exactly_what_is_accepted(self):
+    """
+    `weakly_congruent(profile, shape(A))` is the pre-condition, and the same relation
+    on the result is the post-condition: the profile coarsens both arguments, and the
+    sum refines the profile. Checked to be exact -- accepted if and only if it holds.
+    """
+    A = Layout((4, 3), (1, 4))
+    B = Layout((4, 3), (3, 1))
+    N = Layout(((2, 2), 3), ((1, 2), 4))
+    for profile, X, Y in ((1, A, B), ((1, 1), A, B), ((1, 1, 1), A, B),
+                          ((1, 1), A, N), (((1, 1), 1), N, N), (((1, 1), 1), A, B)):
+      holds = (weakly_congruent(profile, shape(X))
+               and weakly_congruent(profile, shape(Y)))
+      if holds:
+        R = layout_add(X, Y, profile)
+        assert weakly_congruent(profile, shape(R)), f"{profile} does not coarsen {R}"
+        assert size(R) == size(X)
+      else:
+        with pytest.raises(ValueError, match="rank mismatch"):
+          layout_add(X, Y, profile)
+
+  def test_a_profile_must_name_every_mode(self):
+    """
+    Unlike `coalesce`, a short profile is refused rather than padded. `coalesce` can
+    leave a mode alone; there is no leaving a mode alone in a sum, so an unnamed mode
+    has no meaning to fall back on.
+    """
+    A = Layout((4, 3, 2), (1, 4, 12))
+    B = Layout((4, 3, 2), (2, 8, 24))
+    with pytest.raises(ValueError, match="rank mismatch"):
+      layout_add(A, B, (1,))
+    assert size(layout_add(A, B, (1, 1, 1))) == size(A)
+
+  def test_rank_mismatch_is_refused(self):
+    with pytest.raises(ValueError, match="rank mismatch"):
+      layout_add(Layout(12, 1), Layout(12, 1), (1, 1))
+    with pytest.raises(ValueError, match="rank mismatch"):
+      layout_add(Layout((4, 3), (1, 4)), Layout(12, 1), (1, 1))
+
+  def test_none_is_the_identity_by_mode_too(self):
+    """`None` is the additive identity whatever the profile, not a rank mismatch."""
+    A = Layout((4, 3), (1, 4))
+    assert layout_add(A, None, (1, 1)) == A
+    assert layout_add(None, A, (1, 1)) == A
