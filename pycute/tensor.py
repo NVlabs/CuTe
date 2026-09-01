@@ -64,7 +64,6 @@ class Tensor:
       T[2, 3]            == 0.0
       shape(T[None, 2])  == (4,)
     """
-    i = transform_leaf(lambda x: None if x == slice(None) else x, i)
     offset, sliced = self.layout._offset_and_slice(i)
     return self.accessor[offset] if rank(sliced) == 0 else Tensor(self.accessor + offset, sliced)
 
@@ -75,7 +74,6 @@ class Tensor:
     Pre-conditions:
       `i` names every mode; a slicing coordinate raises a ValueError
     """
-    i = transform_leaf(lambda x: None if x == slice(None) else x, i)
     offset, sliced = self.layout._offset_and_slice(i)
     if rank(sliced) != 0: raise ValueError(f"Tensor.__setitem__({i}, {value}): Incomplete coordinate in setitem.")
     self.accessor[offset] = value

@@ -129,6 +129,7 @@ class Layout(LayoutBase):
     `(offset, sublayout)`. `None` entries in `crd` mark the modes retained in the
     sublayout.
     """
+    crd = transform_leaf(lambda x: None if x == slice(None) else x, crd)
     return (self(crd), Layout._set(slice_(crd, self.shape), slice_(crd, self.stride)))
 
   def __getitem__(self, i: Integer) -> Layout:
