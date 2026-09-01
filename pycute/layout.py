@@ -134,19 +134,24 @@ class Layout(LayoutBase):
   def __getitem__(self, i: Integer) -> Layout:
     """
     Get mode `i` of the layout as a sublayout (tuple-like indexing over modes).
+
+    Pre-conditions:
+      -rank(self) <= i < rank(self); otherwise an IndexError is raised
+
+    Examples:
+      Layout((2, 3, 5), (1, 2, 6))[1]   == Layout(3, 2)
+      Layout((2, 3, 5), (1, 2, 6))[-1]  == Layout(5, 6)
+      Layout((2, (3, 5)), (1, (2, 6)))[-1] == Layout((3, 5), (2, 6))
+      Layout(8, 1)[-1]                  == Layout(8, 1)
+      Layout((2, 3), (1, 2))[2]         -> IndexError
+      Layout((2, 3), (1, 2))[-3]        -> IndexError
     """
-    if i >= rank(self):
+    idx = i + rank(self) if i < 0 else i
+    if not 0 <= idx < rank(self):
       raise IndexError(f"Index {i} out of range for Layout {self}")
     if is_tuple(self.shape):
-      return Layout._set(self.shape[i], self.stride[i])
+      return Layout._set(self.shape[idx], self.stride[idx])
     return Layout._set(self.shape, self.stride)
-
-  def get(self, mode=()) -> Layout:
-    """
-    Get the sublayout at the given (possibly nested) `mode` path.
-    """
-    return Layout._set(reduce(lambda a,i: a[i], mode, self.shape),
-                       reduce(lambda a,i: a[i], mode, self.stride))
 
   def __eq__(self, other) -> bool:
     """Two Layouts are equal iff their shapes and strides are equal."""

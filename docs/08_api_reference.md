@@ -1422,9 +1422,22 @@ L((2, 3)) == 19
 
 Get mode `i` of the layout as a sublayout (tuple-like indexing over modes).
 
-#### `Layout.get(mode=())`
+*Pre-conditions:*
 
-Get the sublayout at the given (possibly nested) `mode` path.
+```
+-rank(self) <= i < rank(self); otherwise an IndexError is raised
+```
+
+*Examples:*
+
+```python
+Layout((2, 3, 5), (1, 2, 6))[1]   == Layout(3, 2)
+Layout((2, 3, 5), (1, 2, 6))[-1]  == Layout(5, 6)
+Layout((2, (3, 5)), (1, (2, 6)))[-1] == Layout((3, 5), (2, 6))
+Layout(8, 1)[-1]                  == Layout(8, 1)
+Layout((2, 3), (1, 2))[2]         -> IndexError
+Layout((2, 3), (1, 2))[-3]        -> IndexError
+```
 
 #### `Layout.__eq__(other)`
 
