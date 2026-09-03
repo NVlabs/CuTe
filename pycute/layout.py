@@ -132,12 +132,23 @@ class Layout(LayoutBase):
     crd = transform_leaf(lambda x: None if x == slice(None) else x, crd)
     return (self(crd), Layout._set(slice_(crd, self.shape), slice_(crd, self.stride)))
 
-  def __getitem__(self, i: Integer) -> Layout:
+  def __getitem__(self, i: Integer | slice) -> Layout:
     """
-    Get mode `i` of the layout as a sublayout (tuple-like indexing over modes).
+    Get the mode(s) `i` names as a sublayout (tuple-like indexing over modes).
+
+    Shape and stride are indexed directly, so this *is* tuple indexing and
+    inherits every one of its rules: an Integer names one mode and unwraps it
+    while a slice names a range and keeps it wrapped, negative indices count
+    from the end, an out-of-range index raises `IndexError`, and out-of-range
+    slice bounds clamp. `wrap` is what lets a rank-1 Layout whose shape is a
+    scalar rather than a 1-tuple behave as the 1-tuple it denotes.
 
     Pre-conditions:
-      -rank(self) <= i < rank(self); otherwise an IndexError is raised
+      -rank(self) <= i < rank(self) for an Integer `i`; otherwise an IndexError
+
+    Post-conditions:
+      A[i:j][k] == A[i+k]
+      A[:] == A                    for a Layout whose shape is a tuple
 
     Examples:
       Layout((2, 3, 5), (1, 2, 6))[1]   == Layout(3, 2)
@@ -146,13 +157,18 @@ class Layout(LayoutBase):
       Layout(8, 1)[-1]                  == Layout(8, 1)
       Layout((2, 3), (1, 2))[2]         -> IndexError
       Layout((2, 3), (1, 2))[-3]        -> IndexError
+
+      A = Layout((2, 3, 5, 7), (1, 2, 6, 30))
+      A[1:-1]   == Layout((3, 5), (2, 6))
+      A[1:]     == Layout((3, 5, 7), (2, 6, 30))
+      A[::2]    == Layout((2, 5), (1, 6))
+      A[1:2]    == Layout((3,), (2,))       # a slice keeps the mode wrapped
+      A[1]      == Layout(3, 2)             # an Integer unwraps it
+      A[2:2]    == Layout((), ())           # empty, as for a tuple
+      A[1:99]   == Layout((3, 5, 7), (2, 6, 30))
+      Layout(8, 1)[0:1]                 == Layout((8,), (1,))
     """
-    idx = i + rank(self) if i < 0 else i
-    if not 0 <= idx < rank(self):
-      raise IndexError(f"Index {i} out of range for Layout {self}")
-    if is_tuple(self.shape):
-      return Layout._set(self.shape[idx], self.stride[idx])
-    return Layout._set(self.shape, self.stride)
+    return Layout._set(wrap(self.shape)[i], wrap(self.stride)[i])
 
   def __eq__(self, other) -> bool:
     """Two Layouts are equal iff their shapes and strides are equal."""

@@ -231,7 +231,7 @@ This is sometimes useful for predicate generation, where the caller wants
 to ask "if I extended this layout, what would the offset be?". For
 in-bounds coordinates, the result is always a valid offset.
 
-## Sublayouts: `[i]` and `.get(mode)`
+## Sublayouts: `[i]`, `[i:j]` and `.get(mode)`
 
 `Layout.__getitem__` returns the sublayout at top-level mode `i`:
 
@@ -266,26 +266,47 @@ Layout((2, 4), (1, 6))
 Layout(2, 1)
 ```
 
-To pick out **multiple** modes at once and bundle them into a single new
-layout, use `select` or `take` from
-[`htuple.py`](../pycute/htuple.py) with `make_layout`:
+A **contiguous range** of modes is a slice, and — unlike indexing — it keeps
+the modes wrapped, so the result is a `Layout` rather than one mode of it:
 
 ```python
 >>> A = Layout((2, 3, 5, 7), (1, 2, 6, 30))
->>> make_layout(select[1, 3](A))     # modes 1 and 3
-Layout((3, 7), (2, 30))
->>> make_layout(select[0, 1, 3](A))  # modes 0, 1, and 3
-Layout((2, 3, 7), (1, 2, 30))
->>> make_layout(take[1, 4](A))       # modes 1 through 3 inclusive
+>>> A[1:-1]                          # modes 1 and 2
+Layout((3, 5), (2, 6))
+>>> A[1:]                            # modes 1 onward
 Layout((3, 5, 7), (2, 6, 30))
+>>> A[::2]                           # every other mode
+Layout((2, 5), (1, 6))
+>>> A[1:2]                           # one mode, still wrapped
+Layout((3,), (2,))
+>>> A[1]                             # one mode, unwrapped
+Layout(3, 2)
 ```
 
-`select[i, j, ...]` and `take[i, j]` always return a *tuple* of
-sub-layouts; wrapping with `make_layout` concatenates them into a single
-`Layout`. This is the moral equivalent of `cute::select<I...>(A)` and
-`cute::take<Begin, End>(A)` in C++ CuTe.
+This is exactly the distinction Python draws between `t[i]` and `t[i:j]`, and
+the slice bounds are clamped rather than checked, again as for a tuple:
+`A[2:2]` is `Layout((), ())` and `A[1:99]` is `A[1:]`. C++ CuTe's
+`cute::take<Begin, End>(A)` is `A[Begin:End]`.
 
-(See [`test_layout.py`](../test/test_layout.py).)
+For an **arbitrary** set of modes — reordered, or repeated — use `select` from
+[`htuple.py`](../pycute/htuple.py) with `make_layout`:
+
+```python
+>>> make_layout(select[1, 3](A))     # modes 1 and 3
+Layout((3, 7), (2, 30))
+>>> make_layout(select[3, 1](A))     # ...in the other order
+Layout((7, 3), (30, 2))
+```
+
+`select[i, j, ...]` always returns a *tuple* of sub-layouts; wrapping with
+`make_layout` concatenates them into a single `Layout`, which is the moral
+equivalent of `cute::select<I...>(A)` in C++ CuTe.
+
+> Mode indexing and [slicing a Layout](#slicing-a-layout) are different axes.
+> `A[i:j]` selects *modes*; supplying a coordinate with `None` entries selects
+> *elements*. The next section covers the latter.
+
+(See [`test_layout.py::TestLayoutModeIndexing`](../test/test_layout.py).)
 
 ## Slicing a Layout
 

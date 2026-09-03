@@ -255,6 +255,10 @@ def select(obj: HTuple, *, mode=()) -> tuple:
   """
   Select the modes of `obj` named by `mode`, in the order given, as a tuple.
 
+  Use this to reorder or repeat modes. A contiguous range needs no function at
+  all -- slice the object, `t[i:j]` for a tuple and `A[i:j]` for a Layout, which
+  rebuilds a Layout rather than returning a tuple of them.
+
   Post-conditions:
     len(result) == len(mode)
     result[i] == get[mode[i]](obj)
@@ -268,29 +272,6 @@ def select(obj: HTuple, *, mode=()) -> tuple:
     select[0, 1]((2, (3, 4), 5))  == (2, (3, 4))
   """
   return tuple(get(obj, mode=i) for i in mode)
-
-
-@ModeOpDecorator
-def take(obj: HTuple, *, mode=()) -> tuple:
-  """
-  Select the modes of `obj` in the half-open range `[mode[0], mode[1])`.
-
-  Pre-conditions:
-    len(mode) == 2 and mode[0] <= mode[1]; otherwise a ValueError is raised
-
-  Post-conditions:
-    take[i, j](obj) == select[tuple(range(i, j))](obj)
-
-  Examples:
-    A = Layout((2, 3, 5, 7), (1, 2, 6, 30))
-    take[1, 4](A)     == (Layout(3, 2), Layout(5, 6), Layout(7, 30))
-    take[1, 2](A)     == (Layout(3, 2),)
-    take[2, 2](A)     == ()
-    take[2, 1](A)     -> ValueError
-    take[1, 2, 3](A)  -> ValueError
-  """
-  if not (len(mode) == 2 and mode[0] <= mode[1]): raise ValueError(f"take({obj}, {mode})")
-  return select(obj, mode=tuple(i for i in range(mode[0], mode[1])))
 
 
 def transform_apply_leaf(make, fn, htuple: HTuple, *tuples: HTuple) -> HTuple:

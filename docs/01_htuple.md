@@ -202,27 +202,20 @@ This is the moral equivalent of `cute::select<I...>(A)` in C++ CuTe — but
 because PyCuTe's `select` returns the underlying tuple of sub-layouts, you
 combine it with `make_layout` to recover the C++ "single-Layout" result.
 
-### `take(obj, *, mode=())`
-
-Return the contiguous range of sub-objects from index `mode[0]` to
-`mode[1]` (exclusive). The result is a tuple, like `select`'s. Reverse
-ranges are an error; an empty range returns the empty tuple:
+Use `select` to **reorder** or **repeat** modes. A *contiguous* range needs no
+mode-op at all — slice the object:
 
 ```python
->>> A = Layout((2, 3, 5, 7), (1, 2, 6, 30))
->>> take[1, 3](A)
-(Layout(3, 2), Layout(5, 6))
->>> take[1, 4](A)
-(Layout(3, 2), Layout(5, 6), Layout(7, 30))
->>> take[1, 1](A)
-()                                  # empty range, empty tuple
->>> take[3, 1](A)                   # raises ValueError
+>>> (1, 2, 3, 4)[1:3]                # a tuple slices natively
+(2, 3)
+>>> A[1:3]                           # a Layout slices to a Layout
+Layout((3, 5), (2, 6))
 ```
 
-C++ CuTe equivalent: `cute::take<Begin, End>(A)`. Use
-`make_layout(take[i, j](A))` to recover the single-Layout C++ behavior.
+C++ CuTe's `cute::take<Begin, End>(A)` is `A[Begin:End]` here. See
+[Sublayouts](03_layout.md#sublayouts-i-ij-and-getmode) for the Layout case.
 
-(See [`test_htuple.py::TestSelectTake`](../test/test_htuple.py).)
+(See [`test_htuple.py::TestSelect`](../test/test_htuple.py).)
 
 ### `wrap` / `unwrap`
 
@@ -396,8 +389,7 @@ to the mode at this path". PyCuTe expresses this uniformly with the
 * [`stride`](../pycute/stride.py): `stride(A)`, `stride[1](A)`.
 * [`coshape`](../pycute/stride.py) and `coprofile`.
 * [`get`](../pycute/htuple.py), [`lift`](../pycute/htuple.py),
-  [`replace`](../pycute/htuple.py), [`select`](../pycute/htuple.py), and
-  [`take`](../pycute/htuple.py).
+  [`replace`](../pycute/htuple.py), and [`select`](../pycute/htuple.py).
 * [`coalesce`](../pycute/algebra.py) and `coalesce_z`: `coalesce[1](A)`.
 * [`composition`](../pycute/algebra.py): `composition[0](A, B)`.
 * [`logical_divide`](../pycute/algebra.py) and `zipped_divide`:

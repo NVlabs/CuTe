@@ -221,9 +221,9 @@ class TestGetLift:
     assert lift[1](L, pad=Layout(1, 0), make=make_layout) == Layout((1, 4), (0, 2))
 
 
-class TestSelectTake:
-  """`select` picks specific top-level modes; `take` picks a range
-  `[begin, end)`. Both always return a tuple."""
+class TestSelect:
+  """`select` picks specific top-level modes, in any order, and always returns
+  a tuple. A contiguous range is a slice of the object instead."""
 
   def test_select_on_tuple(self):
     assert select((1, 2, 3, 4), mode=(0, 2)) == (1, 3)
@@ -244,22 +244,13 @@ class TestSelectTake:
     assert make_layout(select[1, 3](A)) == Layout((3, 7), (2, 30))
     assert make_layout(select[0, 1, 3](A)) == Layout((2, 3, 7), (1, 2, 30))
 
-  def test_take_on_tuple(self):
-    assert take((1, 2, 3, 4), mode=(1, 3)) == (2, 3)
-    assert take[1, 3]((1, 2, 3, 4)) == (2, 3)
-    assert take[0, 4]((1, 2, 3, 4)) == (1, 2, 3, 4)     # full
-    assert take[1, 1]((1, 2, 3, 4)) == ()               # empty
-
-  def test_take_on_layout(self):
-    """`take` on a `Layout` returns a tuple of consecutive sub-layouts."""
+  def test_a_contiguous_range_is_a_slice(self):
+    """A range of modes needs no mode-op: tuples slice natively, and a Layout
+    slices to a Layout, which is what a range of modes is usually wanted as."""
     A = Layout((2, 3, 5, 7), (1, 2, 6, 30))
-    assert take[1, 3](A) == (Layout(3, 2), Layout(5, 6))
-    assert take[1, 4](A) == (Layout(3, 2), Layout(5, 6), Layout(7, 30))
-
-  def test_take_reverse_range_raises(self):
-    """`take[end, begin]` with `begin > end` is a ValueError."""
-    with pytest.raises(ValueError):
-      take[3, 1]((1, 2, 3, 4))
+    assert (1, 2, 3, 4)[1:3] == (2, 3)
+    assert A[1:3] == Layout((3, 5), (2, 6))
+    assert A[1:3] == make_layout(select[1, 2](A))
 
 
 class TestTransformLeaf:

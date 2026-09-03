@@ -7,6 +7,7 @@ Unit tests for pycute.layout
 These tests are also worked examples for docs/03_layout.md.
 """
 
+import itertools
 import logging
 import pytest
 import sympy
@@ -110,6 +111,65 @@ class TestLayoutSlicing:
     off, sub = A._offset_and_slice((None, None))
     assert off == 0
     assert sub == A
+
+
+class TestLayoutModeIndexing:
+  """`Layout[i]` indexes *modes*, not coordinates -- the tuple-like view of a
+  Layout, and a different axis entirely from the coordinate slicing above."""
+
+  A = Layout((2, 3, 5, 7), (1, 2, 6, 30))
+
+  def test_integer_unwraps_one_mode(self):
+    assert self.A[1] == Layout(3, 2)
+    assert self.A[-1] == Layout(7, 30)
+    assert Layout((2, (3, 5)), (1, (2, 6)))[-1] == Layout((3, 5), (2, 6))
+
+  def test_integer_out_of_range_raises(self):
+    for i in (4, -5):
+      with pytest.raises(IndexError):
+        self.A[i]
+
+  def test_slice_keeps_the_modes_wrapped(self):
+    """`A[i]` unwraps the mode and `A[i:j]` does not, exactly as for a tuple."""
+    assert self.A[1:-1] == Layout((3, 5), (2, 6))
+    assert self.A[1:] == Layout((3, 5, 7), (2, 6, 30))
+    assert self.A[:2] == Layout((2, 3), (1, 2))
+    assert self.A[1:2] == Layout((3,), (2,))
+    assert self.A[1] == Layout(3, 2)
+
+  def test_slice_bounds_are_clamped_not_checked(self):
+    assert self.A[1:99] == self.A[1:]
+    assert self.A[2:2] == Layout((), ())
+    assert self.A[9:] == Layout((), ())
+
+  def test_slice_supports_a_step(self):
+    assert self.A[::2] == Layout((2, 5), (1, 6))
+    assert self.A[::-1] == Layout((7, 5, 3, 2), (30, 6, 2, 1))
+
+  def test_a_scalar_shape_indexes_as_the_one_tuple_it_denotes(self):
+    """`Layout(8, 1).shape` is the bare `8`, which is not subscriptable, so
+    `__getitem__` indexes `wrap(shape)` rather than `shape`. Dropping that
+    `wrap` would turn every one of these into a TypeError -- which is the whole
+    reason the body cannot be `Layout._set(self.shape[i], self.stride[i])`."""
+    L = Layout(8, 1)
+    assert not is_tuple(shape(L)) and rank(L) == 1
+    assert L[0] == Layout(8, 1)            # mode 0 is the layout itself
+    assert L[-1] == Layout(8, 1)
+    assert L[0:1] == Layout((8,), (1,))    # a slice still wraps
+    assert L[1:] == Layout((), ())
+    assert list(L) == [Layout(8, 1)]       # iteration must terminate
+    with pytest.raises(IndexError):
+      L[1]
+
+  def test_slice_agrees_with_select(self):
+    for i, j in itertools.product(range(5), repeat=2):
+      assert self.A[i:j] == make_layout(select[tuple(range(i, j))](self.A))
+
+  def test_iteration_still_works(self):
+    """Iteration goes through the sequence protocol, so it must keep raising
+    IndexError past the end rather than being caught by the slice branch."""
+    assert list(self.A) == [self.A[i] for i in range(rank(self.A))]
+    assert make_layout(self.A) == self.A
 
 
 class TestLayoutEquality:

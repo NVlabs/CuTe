@@ -9,7 +9,7 @@ links to the source and to the tests that exercise it.
 
 The reference is organized by module:
 
-* [`htuple`](#module-htuple) — `is_tuple`, `profile`, `congruent`, `weakly_congruent`, `wrap`, `unwrap`, `ModeOpDecorator`, `get`, `lift`, `replace`, `select`, `take`, `transform_apply_leaf`, `transform_leaf`, `leaves`, `zip_leaves`, `fold_leaf`, `flatten`, `unflatten`, `repeat_like`, `product`, `product_each`, `slice_`, `dice_`
+* [`htuple`](#module-htuple) — `is_tuple`, `profile`, `congruent`, `weakly_congruent`, `wrap`, `unwrap`, `ModeOpDecorator`, `get`, `lift`, `replace`, `select`, `transform_apply_leaf`, `transform_leaf`, `leaves`, `zip_leaves`, `fold_leaf`, `flatten`, `unflatten`, `repeat_like`, `product`, `product_each`, `slice_`, `dice_`
 * [`typedefs`](#module-typedefs) — `Integer`, `register_integer_type`, `is_int`, `is_static`, `divmod`, `StrideScalar`, `is_stride_scalar`, `HTuple`, `Profile`, `IntTuple`, `Shape`, `Coord`, `Stride`
 * [`stride`](#module-stride) — `stride`, `inner_product`, `prefix_product`, `coshape`, `coprofile`
 * [`shape`](#module-shape) — `shape`, `size`, `rank`, `depth`, `compatible`, `common_refinement`, `common_coarsening`, `idx2crd`, `crd2idx`, `coordinates`
@@ -261,6 +261,10 @@ replace[3]((1, 2, 3), 42)                  -> ValueError
 
 Select the modes of `obj` named by `mode`, in the order given, as a tuple.
 
+Use this to reorder or repeat modes. A contiguous range needs no function at
+all -- slice the object, `t[i:j]` for a tuple and `A[i:j]` for a Layout, which
+rebuilds a Layout rather than returning a tuple of them.
+
 *Post-conditions:*
 
 ```
@@ -277,33 +281,6 @@ select[3, 1](A)               == (Layout(7, 30), Layout(3, 2))
 select[2](A)                  == (Layout(5, 6),)
 make_layout(select[1, 3](A))  == Layout((3, 7), (2, 30))
 select[0, 1]((2, (3, 4), 5))  == (2, (3, 4))
-```
-
-### `take(obj, *, mode=())`
-
-Select the modes of `obj` in the half-open range `[mode[0], mode[1])`.
-
-*Pre-conditions:*
-
-```
-len(mode) == 2 and mode[0] <= mode[1]; otherwise a ValueError is raised
-```
-
-*Post-conditions:*
-
-```
-take[i, j](obj) == select[tuple(range(i, j))](obj)
-```
-
-*Examples:*
-
-```python
-A = Layout((2, 3, 5, 7), (1, 2, 6, 30))
-take[1, 4](A)     == (Layout(3, 2), Layout(5, 6), Layout(7, 30))
-take[1, 2](A)     == (Layout(3, 2),)
-take[2, 2](A)     == ()
-take[2, 1](A)     -> ValueError
-take[1, 2, 3](A)  -> ValueError
 ```
 
 ### `transform_apply_leaf(make, fn, htuple, *tuples)`
@@ -1420,12 +1397,26 @@ L((2, 3)) == 19
 
 #### `Layout.__getitem__(i)`
 
-Get mode `i` of the layout as a sublayout (tuple-like indexing over modes).
+Get the mode(s) `i` names as a sublayout (tuple-like indexing over modes).
+
+Shape and stride are indexed directly, so this *is* tuple indexing and
+inherits every one of its rules: an Integer names one mode and unwraps it
+while a slice names a range and keeps it wrapped, negative indices count
+from the end, an out-of-range index raises `IndexError`, and out-of-range
+slice bounds clamp. `wrap` is what lets a rank-1 Layout whose shape is a
+scalar rather than a 1-tuple behave as the 1-tuple it denotes.
 
 *Pre-conditions:*
 
 ```
--rank(self) <= i < rank(self); otherwise an IndexError is raised
+-rank(self) <= i < rank(self) for an Integer `i`; otherwise an IndexError
+```
+
+*Post-conditions:*
+
+```
+A[i:j][k] == A[i+k]
+A[:] == A                    for a Layout whose shape is a tuple
 ```
 
 *Examples:*
@@ -1437,6 +1428,16 @@ Layout((2, (3, 5)), (1, (2, 6)))[-1] == Layout((3, 5), (2, 6))
 Layout(8, 1)[-1]                  == Layout(8, 1)
 Layout((2, 3), (1, 2))[2]         -> IndexError
 Layout((2, 3), (1, 2))[-3]        -> IndexError
+
+A = Layout((2, 3, 5, 7), (1, 2, 6, 30))
+A[1:-1]   == Layout((3, 5), (2, 6))
+A[1:]     == Layout((3, 5, 7), (2, 6, 30))
+A[::2]    == Layout((2, 5), (1, 6))
+A[1:2]    == Layout((3,), (2,))       # a slice keeps the mode wrapped
+A[1]      == Layout(3, 2)             # an Integer unwraps it
+A[2:2]    == Layout((), ())           # empty, as for a tuple
+A[1:99]   == Layout((3, 5, 7), (2, 6, 30))
+Layout(8, 1)[0:1]                 == Layout((8,), (1,))
 ```
 
 #### `Layout.__eq__(other)`
