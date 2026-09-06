@@ -219,6 +219,12 @@ pytest test/test_coalesce.py          # a single module
 pytest -k coalesce                    # tests matching a keyword
 ```
 
+## Talks
+
+- [GPU MODE Lecture 57, Cute](https://www.youtube.com/watch?v=vzUhbDO_0qk). Cris Cecka. [Slides](docs/GPUMODE_057_CuTe.pdf)
+
+- [GPU MODE lecture 114, PyCuTe](https://www.youtube.com/watch?v=_LmOPM5HnZ0). Cris Cecka. [Slides](docs/GPUMODE_114_PyCuTe.pdf)
+
 ## References
 
 - Cris Cecka. *CuTe Layout Representation and Algebra.*
