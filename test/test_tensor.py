@@ -264,7 +264,7 @@ class TestAccessor:
     assert ia[5] == 5
     assert (ia + 3)[2] == 5
 
-    # With an ArithTuple coordinate base, addition is elementwise
+    # With an ArithTuple coordinate origin, addition is elementwise
     ia = ImplicitAccessor(ArithTuple(10, 20))
     assert ia[ArithTuple(1, 2)] == (11, 22)
 

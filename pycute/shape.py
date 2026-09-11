@@ -9,8 +9,9 @@ A `Shape` is an `IntTuple` of positive extents describing a layout's domain
 and this module holds the operations on that space: reading its structure
 (`shape`, `size`, `rank`, `depth`), the *compatibility* partial order relating
 one shape's coordinates to another's (`compatible`, `common_refinement`,
-`common_coarsening`), and the maps between a coordinate's forms (`idx2crd`,
-`crd2idx`, `coordinates`).
+`common_coarsening`), the maps between a coordinate's forms (`idx2crd`,
+`crd2idx`, `coordinates`), and whether a coordinate is one the shape has at all
+(`in_bounds`).
 """
 
 from functools import reduce
@@ -326,3 +327,28 @@ def coordinates(shape: Shape):
         yield (c,) + rest
     return
   raise TypeError(f"coordinates({shape})")
+
+
+def in_bounds(crd: Coord, shape: Shape) -> bool:
+  """
+  Test whether `crd` is an in-bounds coordinate of `shape`.
+
+  Pre-conditions:
+    weakly_congruent(crd, shape)
+
+  Post-conditions:
+    in_bounds(c, S) == True   for every c in coordinates(S)
+    in_bounds(i, S) == True   for i in range(size(S))
+
+  Examples:
+    in_bounds((1, 2), (4, 4))           == True
+    in_bounds((-1, 2), (4, 4))          == False
+    in_bounds((1, 4), (4, 4))           == False
+    in_bounds(0, (4, 4))                == True
+    in_bounds(15, (4, 4))               == True
+    in_bounds(16, (4, 4))               == False    # excess lands in the last leaf
+    in_bounds(2 * E(0), (4, 4))         == True
+    in_bounds((1, (0, 7)), (4, (2, 8))) == True
+    in_bounds((1, (2, 7)), (4, (2, 8))) == False
+  """
+  return all(0 <= c < s for c, s in zip_leaves(idx2crd(crd, shape), shape))

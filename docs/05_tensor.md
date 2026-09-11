@@ -105,11 +105,11 @@ worrying about garbage collection. Source:
 
 (See [`test_tensor.py::TestAccessor`](../test/test_tensor.py).)
 
-### `ImplicitAccessor(base)`
+### `ImplicitAccessor(origin)`
 
 A "no-op" accessor that does *no* dereference: dereferencing it returns
-the offset itself. This is what gets used when you call
-`identity_tensor` or pass a `Layout` to `print_tensor`:
+the offset itself, added to its `origin`. This is what gets used when you
+call `identity_tensor` or pass a `Layout` to `print_tensor`:
 
 ```python
 >>> ia = ImplicitAccessor(0)

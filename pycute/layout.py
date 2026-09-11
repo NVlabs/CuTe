@@ -60,7 +60,7 @@ class Layout(LayoutBase):
     Layout((4, 8))               == Layout((4, 8), (1, 4))   # default compact column-major
     Layout((4, 8), (8, 1))(2, 3) == 19                       # evaluate a coordinate
     A = Layout((3, (2, 4)), (2, (1, 6)))
-    A(17) == A(2, 5) == A(2, (1, 2)) == 17                    # the three coordinate forms
+    A(17) == A(2, 5) == A(2, (1, 2)) == 17                   # the three coordinate forms
     A[1][0] == Layout(2, 1)                                  # index into the modes
   """
   __slots__ = ("shape", "stride")

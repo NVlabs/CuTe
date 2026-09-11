@@ -11,7 +11,7 @@ realize gemm, gemv, ger, dot, gett, grouped gemm, conv, etc.
 
 from __future__ import annotations
 
-from pycute import Tensor, rank, size
+from pycute import Layout, Tensor, make_layout, rank, size
 
 
 def gemm(A: Tensor, B: Tensor, C: Tensor) -> None:
@@ -22,15 +22,21 @@ def gemm(A: Tensor, B: Tensor, C: Tensor) -> None:
   rank participates once its modes are folded into these four roles -- row `M`,
   column `N`, reduction `K` and batch `L`.
 
+  Rank-2 operands are the unbatched case.
+
   Pre-conditions:
-    rank(A) == rank(B) == rank(C) == 3
+    rank(A) == rank(B) == rank(C), and either 3 or 2
     size[0](A) == size[0](C)                  the row extent M
     size[0](B) == size[1](C)                  the column extent N
     size[1](A) == size[1](B)                  the reduction extent K
     size[2](A) == size[2](B) == size[2](C)    the batch extent L
   """
+  # In the non-batched case, append a size-1 batch mode for convenience.
+  if rank(A) == 2 and rank(B) == 2 and rank(C) == 2:
+    A, B, C = (Tensor(T.accessor, make_layout([T.layout[0], T.layout[1], Layout(1, 0)])) for T in (A, B, C))
   if rank(A) != 3 or rank(B) != 3 or rank(C) != 3:
-    raise ValueError(f"gemm: operands must be rank-3, got {rank(A)}, {rank(B)}, {rank(C)}")
+    raise ValueError(f"gemm: operands must be all rank-3 or all rank-2, "
+                     f"got {rank(A)}, {rank(B)}, {rank(C)}")
   if size[0](A) != size[0](C):
     raise ValueError(f"gemm: row size mismatch {size[0](A)} != {size[0](C)}")
   if size[0](B) != size[1](C):

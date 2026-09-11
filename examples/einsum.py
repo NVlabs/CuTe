@@ -13,6 +13,45 @@ from pycute import *
 from pycute.alg.ref import gemm
 
 
+def _parse(subscripts : str):
+  """
+  Split an explicit equation "a_modes,b_modes->c_modes" into one label list per
+  operand, discarding whitespace. One label per mode, so "i,->i" gives A a
+  single label, B none at all, and C a single label.
+  """
+  parts = subscripts.replace(" ", "").split("->")
+  if len(parts) != 2:
+    raise ValueError(f"einsum: expected exactly one '->' in {subscripts!r}")
+  inputs = parts[0].split(",")
+  if len(inputs) != 2:
+    raise ValueError(f"einsum: expected exactly two ','-separated inputs in {subscripts!r}")
+  return list(inputs[0]), list(inputs[1]), list(parts[1])
+
+
+def _classify(a_mode, b_mode, c_mode):
+  """
+  Sort the labels by which operands they appear in (Whitepaper, "Tensors and
+  Folding"), returning `(row, col, red, bat)` in first-appearance order:
+
+    row `M` -- A,C     col `N` -- B,C     red `K` -- A,B     bat `L` -- A,B,C
+
+  Those four classes are the four index spaces of a batched GEMM, so this sort
+  is the whole of what makes a contraction one. A label appearing in a single
+  operand has no role among them and is rejected.
+  """
+  SA, SB, SC = set(a_mode), set(b_mode), set(c_mode)
+  order = list(dict.fromkeys(a_mode + b_mode + c_mode))
+  row = [x for x in order if x in SA and x in SC and x not in SB]
+  col = [x for x in order if x in SB and x in SC and x not in SA]
+  red = [x for x in order if x in SA and x in SB and x not in SC]
+  bat = [x for x in order if x in SA and x in SB and x in SC]
+  unsupported = (SA | SB | SC) - set(row + col + red + bat)
+  if unsupported:
+    raise ValueError(f"einsum: label(s) {sorted(unsupported)} appear in only one operand; "
+                     f"each label must appear in at least two of A, B, C")
+  return row, col, red, bat
+
+
 def _fold(tensor : Tensor, labels, groups) -> Tensor:
   """
   Fold `tensor` into a rank-3 view by concatenating its modes per `groups`
@@ -42,14 +81,7 @@ def einsum(subscripts : str, A : Tensor, B : Tensor, C : Tensor) -> Tensor:
   The result accumulates into the caller-provided `C` (`C += A * B`); einsum
   never allocates or zeroes `C`, so zero `C` beforehand for assignment semantics.
   """
-  # Parse the explicit equation "a_modes,b_modes->c_modes" into per-operand labels.
-  parts = subscripts.replace(" ", "").split("->")
-  if len(parts) != 2:
-    raise ValueError(f"einsum: expected exactly one '->' in {subscripts!r}")
-  inputs = parts[0].split(",")
-  if len(inputs) != 2:
-    raise ValueError(f"einsum: expected exactly two ','-separated inputs in {subscripts!r}")
-  a_mode, b_mode, c_mode = list(inputs[0]), list(inputs[1]), list(parts[1])
+  a_mode, b_mode, c_mode = _parse(subscripts)
 
   # Validate each operand and record every label's extent (must agree everywhere).
   extent = {}
@@ -64,19 +96,7 @@ def einsum(subscripts : str, A : Tensor, B : Tensor, C : Tensor) -> Tensor:
       if extent.setdefault(ch, e) != e:
         raise ValueError(f"einsum: label {ch!r} has inconsistent extents {extent[ch]} and {e}")
 
-  # Classify each label by where it appears (Whitepaper, "Tensors and Folding"),
-  # in first-appearance order:
-  #   row M -- A,C    col N -- B,C    red K -- A,B    bat L -- A,B,C
-  SA, SB, SC = set(a_mode), set(b_mode), set(c_mode)
-  order = list(dict.fromkeys(a_mode + b_mode + c_mode))
-  row = [x for x in order if x in SA and x in SC and x not in SB]
-  col = [x for x in order if x in SB and x in SC and x not in SA]
-  red = [x for x in order if x in SA and x in SB and x not in SC]
-  bat = [x for x in order if x in SA and x in SB and x in SC]
-  unsupported = (SA | SB | SC) - set(row + col + red + bat)
-  if unsupported:
-    raise ValueError(f"einsum: label(s) {sorted(unsupported)} appear in only one operand; "
-                     f"each label must appear in at least two of A, B, C")
+  row, col, red, bat = _classify(a_mode, b_mode, c_mode)
 
   A3 = _fold(A, a_mode, (row, red, bat))   # (M,K,L)
   B3 = _fold(B, b_mode, (col, red, bat))   # (N,K,L)

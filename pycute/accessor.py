@@ -175,29 +175,30 @@ class Array(Ptr):
 
 class ImplicitAccessor(Accessor):
   """
-  An accessor with no memory behind it: reading offset `i` returns `base + i`.
+  An accessor with no memory behind it: reading offset `i` returns `origin + i`.
 
   Examples:
     ImplicitAccessor(0)[7]          == 7
     ImplicitAccessor(100)[7]        == 107
     (ImplicitAccessor(0) + 100)[7]  == 107
+    (ImplicitAccessor(0) + 100).origin == 100
   """
-  def __init__(self, base):
-    self.base = base
+  def __init__(self, origin):
+    self.origin = origin
 
   def __add__(self, offset):
-    return ImplicitAccessor(self.base + offset)
+    return ImplicitAccessor(self.origin + offset)
 
   def __getitem__(self, offset):
-    return self.base + offset
+    return self.origin + offset
 
   def __eq__(self, other):
     if not isinstance(other, ImplicitAccessor):
       return NotImplemented
-    return self.base == other.base
+    return self.origin == other.origin
 
   def __repr__(self):
-    return f"{{{self.base}}}"
+    return f"{{{self.origin}}}"
 
 
 class TransformAccessor(Accessor):

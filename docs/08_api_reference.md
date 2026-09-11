@@ -12,7 +12,7 @@ The reference is organized by module:
 * [`htuple`](#module-htuple) — `is_tuple`, `profile`, `congruent`, `weakly_congruent`, `wrap`, `unwrap`, `ModeOpDecorator`, `get`, `lift`, `replace`, `select`, `transform_apply_leaf`, `transform_leaf`, `leaves`, `zip_leaves`, `fold_leaf`, `flatten`, `unflatten`, `repeat_like`, `product`, `product_each`, `slice_`, `dice_`
 * [`typedefs`](#module-typedefs) — `Integer`, `register_integer_type`, `is_int`, `is_static`, `divmod`, `StrideScalar`, `is_stride_scalar`, `HTuple`, `Profile`, `IntTuple`, `Shape`, `Coord`, `Stride`
 * [`stride`](#module-stride) — `stride`, `inner_product`, `prefix_product`, `coshape`, `coprofile`
-* [`shape`](#module-shape) — `shape`, `size`, `rank`, `depth`, `compatible`, `common_refinement`, `common_coarsening`, `idx2crd`, `crd2idx`, `coordinates`
+* [`shape`](#module-shape) — `shape`, `size`, `rank`, `depth`, `compatible`, `common_refinement`, `common_coarsening`, `idx2crd`, `crd2idx`, `coordinates`, `in_bounds`
 * [`atuple`](#module-atuple) — `ArithTuple`, `ScaledBasis`, `E`, `V`, `basis_repr`, `is_basis`, `make_basis_like`, `proj`, `unit`, `as_tuple`
 * [`layout`](#module-layout) — `LayoutBase`, `is_layout`, `Layout`, `make_layout`, `make_layout_like`, `make_ordered_layout`, `Tiler`, `tiler_to_layout`, `recast`
 * [`algebra`](#module-algebra) — `coalesce_z`, `coalesce`, `composition`, `right_inverse`, `left_inverse`, `complement`, `logical_product`, `logical_divide`, `zipped_divide`, `blocked_product`, `raked_product`, `nullspace`, `layout_add`, `greatest_common_domain`
@@ -807,8 +807,9 @@ A `Shape` is an `IntTuple` of positive extents describing a layout's domain
 and this module holds the operations on that space: reading its structure
 (`shape`, `size`, `rank`, `depth`), the *compatibility* partial order relating
 one shape's coordinates to another's (`compatible`, `common_refinement`,
-`common_coarsening`), and the maps between a coordinate's forms (`idx2crd`,
-`crd2idx`, `coordinates`).
+`common_coarsening`), the maps between a coordinate's forms (`idx2crd`,
+`crd2idx`, `coordinates`), and whether a coordinate is one the shape has at all
+(`in_bounds`).
 
 ### `shape(obj, *, mode=())`
 
@@ -1055,6 +1056,37 @@ list(coordinates(6))           == [0, 1, 2, 3, 4, 5]
 list(coordinates((3, 2)))      == [(0,0), (1,0), (2,0), (0,1), (1,1), (2,1)]
 list(coordinates((2, (2, 2)))) == [(0,(0,0)), (1,(0,0)), (0,(1,0)), (1,(1,0)),
                                    (0,(0,1)), (1,(0,1)), (0,(1,1)), (1,(1,1))]
+```
+
+### `in_bounds(crd, shape)`
+
+Test whether `crd` is an in-bounds coordinate of `shape`.
+
+*Pre-conditions:*
+
+```
+weakly_congruent(crd, shape)
+```
+
+*Post-conditions:*
+
+```
+in_bounds(c, S) == True   for every c in coordinates(S)
+in_bounds(i, S) == True   for i in range(size(S))
+```
+
+*Examples:*
+
+```python
+in_bounds((1, 2), (4, 4))           == True
+in_bounds((-1, 2), (4, 4))          == False
+in_bounds((1, 4), (4, 4))           == False
+in_bounds(0, (4, 4))                == True
+in_bounds(15, (4, 4))               == True
+in_bounds(16, (4, 4))               == False    # excess lands in the last leaf
+in_bounds(2 * E(0), (4, 4))         == True
+in_bounds((1, (0, 7)), (4, (2, 8))) == True
+in_bounds((1, (2, 7)), (4, (2, 8))) == False
 ```
 
 ---
@@ -1374,7 +1406,7 @@ methods here implement its core operations.
 Layout((4, 8))               == Layout((4, 8), (1, 4))   # default compact column-major
 Layout((4, 8), (8, 1))(2, 3) == 19                       # evaluate a coordinate
 A = Layout((3, (2, 4)), (2, (1, 6)))
-A(17) == A(2, 5) == A(2, (1, 2)) == 17                    # the three coordinate forms
+A(17) == A(2, 5) == A(2, (1, 2)) == 17                   # the three coordinate forms
 A[1][0] == Layout(2, 1)                                  # index into the modes
 ```
 
@@ -2284,9 +2316,9 @@ a[5] = 42
 a[5] == 42
 ```
 
-### `class ImplicitAccessor(base)`
+### `class ImplicitAccessor(origin)`
 
-An accessor with no memory behind it: reading offset `i` returns `base + i`.
+An accessor with no memory behind it: reading offset `i` returns `origin + i`.
 
 *Examples:*
 
@@ -2294,6 +2326,7 @@ An accessor with no memory behind it: reading offset `i` returns `base + i`.
 ImplicitAccessor(0)[7]          == 7
 ImplicitAccessor(100)[7]        == 107
 (ImplicitAccessor(0) + 100)[7]  == 107
+(ImplicitAccessor(0) + 100).origin == 100
 ```
 
 ### `class TransformAccessor(accessor, transform)`

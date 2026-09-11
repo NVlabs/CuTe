@@ -88,6 +88,37 @@ The companion `einsum_test.py` uses a dependency-free brute-force oracle:
 pytest examples/einsum_test.py
 ```
 
+## `im2col.py`
+
+The `im2col` transformation as a Layout, so an N-D convolution runs as a GEMM
+over the activation in place -- what CUTLASS calls *implicit GEMM*. The
+activation's spatial modes are composed twice, once with a position tiler strided
+by the traversal stride and once with a tap tiler strided by the dilation, giving
+a rank-2 `((N,(Z,P,Q)), ((T,R,S),C))` view that
+[`pycute.alg.ref.gemm`](../pycute/alg/ref/gemm.py) consumes unmodified.
+
+Three views share one construction, differing only in what the layout maps into:
+`im2col` to offsets, `im2col_coord` to activation coordinates (what predication
+and a TMA descriptor need), and `im2col_padded` to coordinates read through a
+bounds-checking accessor, which is how a padded convolution reaches an
+unmodified GEMM.
+
+```python
+from pycute import Layout, make_tensor
+from examples.im2col import im2col
+
+act = make_tensor(Layout((1, 4, 4, 1), (16, 4, 1, 1)))   # (N,H,W,C)
+A = im2col(act, (2, 2))                                  # ((1,(3,3)), ((2,2),1))
+```
+
+The companion `im2col_test.py` checks it against a direct N-D
+cross-correlation, over 1-D through 3-D, traversal stride, dilation, symmetric
+and asymmetric padding, `dgrad` coordinates and CUTLASS example 59's layout:
+
+```sh
+pytest examples/im2col_test.py
+```
+
 ## `algorithms/copy.ipynb`
 
 Walkthrough of the COPY algorithm (Whitepaper §2.6.1): applications that are
@@ -107,6 +138,24 @@ directory to the checkout and puts that on `sys.path`, so a bare
 `jupyter notebook` works without installing anything.
 
 Unit coverage for both loops lives in `test/test_alg_copy.py`.
+
+## `algorithms/gemm.ipynb`
+
+Walkthrough of the GEMM algorithm (Whitepaper §2.6.2), every cell of which
+calls [`pycute.alg.ref.gemm`](../pycute/alg/ref/gemm.py): the BLAS transpose
+variants as a stride choice rather than an algorithm choice, tensor folding and
+the `einsum` applications reviewed above, and then CONV.
+
+The CONV half is a tutorial on implicit GEMM, built on
+[`im2col.py`](im2col.py) above: N-D stencils, traversal stride, dilation,
+padding through a bounds-checking accessor, and `dgrad`. Ten convolutions run as
+one `gemm` call each, checked against a direct cross-correlation oracle, with no
+data movement anywhere.
+
+```sh
+pip install -e ".[viz]"   # optional inline SVG layout figures
+jupyter notebook examples/algorithms/gemm.ipynb
+```
 
 ## Adding an example
 
