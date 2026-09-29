@@ -58,7 +58,7 @@ class TestCoalesce:
 
   def test_coalesce_mode(self):
     # `coalesce[mode](A)` coalesces that one mode of A and leaves the others
-    # alone -- it is `coalesce` with the profile lifted to `mode`.
+    # alone -- it is `coalesce` with the profile placed at `mode`.
     A = Layout(((2, (1, 6)), (3, 4)), ((1, (6, 2)), (100, 300)))
 
     assert coalesce[1](A) == make_layout([A[0], coalesce(A[1])])
@@ -66,6 +66,10 @@ class TestCoalesce:
     assert coalesce[1](A) == coalesce(A, (None, 1))
     assert coalesce(A, mode=(1,)) == coalesce[1](A)
     assert coalesce(A, mode=()) == coalesce(A)
+
+    # A negative index counts from the end
+    assert coalesce[-1](A) == coalesce[1](A)
+    assert coalesce[-2](A) == coalesce[0](A)
 
     # A mode is coalesced but the layout is otherwise preserved
     R = coalesce[1](A)

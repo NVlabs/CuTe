@@ -60,6 +60,7 @@ class TestCoalesceZ:
     assert coalesce_z(A, mode=(1,)) == coalesce_z[1](A)
     assert coalesce_z(A, mode=()) == coalesce_z(A)
     assert shape(coalesce_z[1](A))[-1] == (12, 1)   # size-1 mode preserved
+    assert coalesce_z[-1](A) == coalesce_z[1](A)    # a negative index counts from the end
 
 
   def test_coalesce_z_coord(self):

@@ -117,6 +117,10 @@ class TestLogicalDivide:
     assert logical_divide[0][1](A, B) == logical_divide[0, 1](A, B)
     assert logical_divide[0](A, B, mode=1) == logical_divide[0, 1](A, B)
 
+    # A negative index counts from the end, at every depth
+    assert logical_divide[-1](A, B) == logical_divide[1](A, B)
+    assert logical_divide[-2, -1](A, B) == logical_divide[0, 1](A, B)
+
     # A mode of a Tensor divides its layout
     T = make_tensor(A)
     assert logical_divide[1](T, B).layout == logical_divide[1](A, B)
@@ -124,6 +128,8 @@ class TestLogicalDivide:
     # The named mode must exist
     with pytest.raises(ValueError):
       logical_divide[2](A, B)
+    with pytest.raises(ValueError):
+      logical_divide[-3](A, B)
 
 
   def test_zipped_divide_mode(self):
@@ -136,6 +142,7 @@ class TestLogicalDivide:
     assert zipped_divide[0](A, tiler) == logical_divide[0](A, tiler_to_layout(tiler))
     assert zipped_divide(A, tiler, mode=(0,)) == zipped_divide[0](A, tiler)
     assert zipped_divide(A, tiler, mode=()) == zipped_divide(A, tiler)
+    assert zipped_divide[-2](A, tiler) == zipped_divide[0](A, tiler)
 
     # A single-Layout tiler reaches a depth-0 mode
     assert zipped_divide[0, 1](A, Layout(4, 2)) == make_layout(

@@ -156,9 +156,16 @@ class TestGetLift:
 
   def test_lift_round_trip(self):
     """`get[mode](lift[mode](x)) == x` for any `x` and `mode`."""
-    for mode in [(), (0,), (1,), (0, 2, 3), (1, 1, 0)]:
+    for mode in [(), (0,), (1,), (0, 2, 3), (1, 1, 0), (-1,), (-2,), (1, -3, 0)]:
       x = 99
       assert get[mode](lift[mode](x)) == x
+
+  def test_lift_counts_a_negative_index_from_the_end(self):
+    """A negative index places the value counting from the end of the mode it
+    creates, so the padding goes after it -- and `-1` needs none at all."""
+    assert lift[-1](42) == (42,)
+    assert lift[-2](42, pad=None) == (42, None)
+    assert lift[1, -2](42) == (0, (42, 0))
 
   def test_lift_zero_padded(self):
     """`lift` produces a zero-padded structure with the value at `mode`."""
@@ -186,13 +193,22 @@ class TestGetLift:
   def test_replace_round_trip(self):
     """`get[mode](replace[mode](obj, x)) == x` for any `obj`, `x` and `mode`."""
     obj = ((1, (2, 3)), 4, (5, 6))
-    for mode in [(), (1,), (0, 1, 0), (2, 1)]:
+    for mode in [(), (1,), (0, 1, 0), (2, 1), (-1,), (-3, -1, -2), (-1, 0)]:
       assert get[mode](replace[mode](obj, 99)) == 99
+
+  def test_replace_counts_a_negative_index_from_the_end(self):
+    """A negative index names a mode counting from the end, as for a tuple."""
+    assert replace[-1]((1, 2, 3), 42) == (1, 2, 42)
+    assert replace[-3]((1, 2, 3), 42) == (42, 2, 3)
+    assert replace[0, -1](((1, 2, 3), 4), 42) == ((1, 2, 42), 4)
+    assert replace[-1](7, 42) == (42,)                # a leaf is one mode, as for 0
 
   def test_replace_names_an_existing_mode(self):
     """Unlike `lift`, `replace` will not create the mode it is given."""
     with pytest.raises(ValueError):
       replace[2]((1, 2), 42)
+    with pytest.raises(ValueError):
+      replace[-3]((1, 2), 42)
     assert lift[2](42, pad=None) == (None, None, 42)  # `lift` creates it
 
   def test_replace_of_a_profile_names_one_mode(self):
@@ -203,7 +219,7 @@ class TestGetLift:
     assert replace[1](repeat_like(None, shape(A)), Layout(5, 1)) == ((None, None), Layout(5, 1))
     assert replace[0, 1](repeat_like(None, shape(A)), Layout(4, 2)) == ((None, Layout(4, 2)), None)
 
-    for mode in [(0,), (1,), (0, 1)]:
+    for mode in [(0,), (1,), (0, 1), (-1,), (-2, -1)]:
       B = Layout(1, 0)
       assert composition(A, replace(repeat_like(None, shape(A)), B, mode=mode)) \
              == composition[mode](A, B)
@@ -308,6 +324,14 @@ class TestModeOpDecorator:
     assert shape[0, 1](A) == shape(A, mode=(0, 1)) == 3
     assert shape[0][1](A) == shape[0](A, mode=1) == 3
     assert shape[0, 1](A) == shape(A, mode=[0, 1])     # a list path is a path too
+
+  def test_a_negative_mode_counts_from_the_end(self):
+    """At every depth, `-1` is the last mode, as for a tuple."""
+    A = Layout(((2, 3), 4), ((4, 8), 1))
+    assert shape[-1](A) == shape[1](A) == 4
+    assert shape[0, -1](A) == shape[-2, 1](A) == 3
+    assert size[-2](A) == 6
+    assert stride[-1](A) == 1
 
   def test_mode_is_keyword_only(self):
     """`mode` is keyword-only, so a path is never mistaken for an argument of

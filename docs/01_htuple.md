@@ -140,6 +140,8 @@ zero-padded structure:
 42
 >>> lift[1](42, pad=None)      # `None` says nothing about the other modes
 (None, 42)
+>>> lift[-2](42, pad=None)     # a negative index counts from the end, padding after
+(42, None)
 ```
 
 `make` builds each mode created, so `lift` also raises a `Layout` through the
@@ -167,6 +169,8 @@ The counterpart of `get`: where `lift` builds a structure around a value,
 (1, 42, 3)
 >>> replace[0, 2](((1, 2, 3), 4), 42)
 ((1, 2, 42), 4)
+>>> replace[-1]((1, 2, 3), 42)
+(1, 2, 42)
 ```
 
 `get[mode](replace[mode](obj, x)) == x` always holds, and naming a mode that
@@ -404,7 +408,9 @@ the subscripts — everything else is an ordinary argument, so an operation of a
 arity can be indexed. Subscripts accumulate (`op[0][1] == op[0, 1]`), and `mode=`
 names the same path as a subscript: `shape(A, mode=(0, 1))` is `shape[0, 1](A)`.
 Because `mode` is keyword-only, a path can never be mistaken for an argument of
-the operation itself.
+the operation itself. A negative index counts from the end of the mode it
+indexes, as for a tuple, so `shape[-1](A)` is the shape of `A`'s last mode and
+`composition[-1](A, B)` composes that mode with `B`.
 
 The two groups read differently. A *query* returns a property of the named mode,
 so `shape[0, 1](A)` is `shape(get[0, 1](A))`. An *algebra operation* rebuilds

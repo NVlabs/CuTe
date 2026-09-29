@@ -16,7 +16,7 @@ def coalesce_z(A, profile=1, *, mode=()):
   preserving trailing size-1 modes.
 
   A non-empty `mode` coalesces only that mode of `A` and leaves every other mode
-  unchanged.
+  unchanged; a negative index counts from the end.
 
   Post-conditions:
     size(result) == size(A)
@@ -26,13 +26,14 @@ def coalesce_z(A, profile=1, *, mode=()):
   Examples:
     coalesce_z(Layout((2, 1, 6, 1), (1, 7, 8, 0)))     == Layout((2, 6, 1), (1, 8, 0))
     coalesce_z[1](Layout((3, (2, 6)), (1, (3, 6))))    == Layout((3, 12), (1, 3))
+    coalesce_z[-1](Layout((3, (2, 6)), (1, (3, 6))))   == Layout((3, 12), (1, 3))
   """
-  if mode != ():
-    return coalesce_z(A, lift(profile, pad=None, mode=mode))
-  if hasattr(A, '_coalesce_z'):
-    return A._coalesce_z(profile)
   if A is None:
     return None
+  if mode != ():
+    return coalesce_z(A, replace(repeat_like(None, shape(A)), profile, mode=mode))
+  if hasattr(A, '_coalesce_z'):
+    return A._coalesce_z(profile)
   if is_int(A) or is_tuple(A):
     return coalesce_z(tiler_to_layout(A), profile)
   raise TypeError(f"coalesce_z not supported for type {type(A)}")
@@ -51,7 +52,8 @@ def coalesce(A, profile=1, *, mode=()):
   `tiler_to_layout`.
 
   A non-empty `mode` coalesces only that mode of `A` and leaves every other mode
-  unchanged: `coalesce[1](A)` is `coalesce(A, (None, 1))`.
+  unchanged: `coalesce[1](A)` is `coalesce(A, (None, 1))`, and for a rank-2 `A`
+  so is `coalesce[-1](A)`, a negative index counting from the end.
 
   Post-conditions:
     size(result) == size(A)
@@ -64,13 +66,14 @@ def coalesce(A, profile=1, *, mode=()):
     coalesce(Layout((2, 1, 6, 1), (1, 7, 8, 0)))       == Layout((2, 6), (1, 8))
     coalesce(Layout((2, (1, 6)), (1, (6, 2))), (1, 1)) == Layout((2, 6), (1, 2))
     coalesce[1](Layout((3, (2, 6)), (1, (3, 6))))      == Layout((3, 12), (1, 3))
+    coalesce[-1](Layout((3, (2, 6)), (1, (3, 6))))     == Layout((3, 12), (1, 3))
   """
-  if mode != ():
-    return coalesce(A, lift(profile, pad=None, mode=mode))
-  if hasattr(A, '_coalesce'):
-    return A._coalesce(profile)
   if A is None:
     return None
+  if mode != ():
+    return coalesce(A, replace(repeat_like(None, shape(A)), profile, mode=mode))
+  if hasattr(A, '_coalesce'):
+    return A._coalesce(profile)
   if is_int(A) or is_tuple(A):
     return coalesce(tiler_to_layout(A), profile)
   raise TypeError(f"coalesce not supported for type {type(A)}")
@@ -91,12 +94,12 @@ def composition(A, B: Tiler, *, mode=()):
   `tiler_to_layout(B)`.
 
   A non-empty `mode` composes only that mode of `A` and leaves every other mode
-  unchanged.
+  unchanged; a negative index counts from the end.
 
   Pre-conditions:
     A and B satisfy the shape- and stride-divisibility conditions
     (Whitepaper, Eqs. (20)-(21)); otherwise a ValueError is raised.
-    mode names a mode of A: rank[mode[:-1]](A) > mode[-1]
+    mode names a mode of A: -rank[mode[:-1]](A) <= mode[-1] < rank[mode[:-1]](A)
 
   Post-conditions:
     compatible(B, get[mode](result))  -- B refines result's domain
@@ -107,6 +110,7 @@ def composition(A, B: Tiler, *, mode=()):
     composition(Layout(20, 2), Layout((5, 4), (4, 1)))          == Layout((5, 4), (8, 2))
     composition(Layout(12), Layout((4, 3)))                     == Layout((4, 3), (1, 4))
     composition[1](Layout((4, 6), (1, 4)), Layout(3, 2))        == Layout((4, 3), (1, 8))
+    composition[-1](Layout((4, 6), (1, 4)), Layout(3, 2))       == Layout((4, 3), (1, 8))
     composition(None, (4, 3))                                   == Layout((4, 3), (E(0), E(1)))
   """
   if A is None:
@@ -255,7 +259,7 @@ def logical_product(A, B: Tiler, *, mode=()):
   promoted Layout's modes.
 
   A non-empty `mode` reproduces only that mode of `A` over `B` and leaves every
-  other mode unchanged.
+  other mode unchanged; a negative index counts from the end.
 
   Post-conditions:
     rank(get[mode](result)) == 2  when is_layout(B)
@@ -268,9 +272,13 @@ def logical_product(A, B: Tiler, *, mode=()):
     logical_product(Layout(3, 1), Layout(4, 1))           == Layout((3, 4), (1, 3))
     logical_product[0](Layout((3, 5), (1, 20)), Layout(4, 1))
         == Layout(((3, 4), 5), ((1, 3), 20))
+    logical_product[-2](Layout((3, 5), (1, 20)), Layout(4, 1))
+        == Layout(((3, 4), 5), ((1, 3), 20))
   """
+  if A is None:
+    raise TypeError(f"logical_product not supported for type {type(A)}")
   if mode != ():
-    return logical_product(A, lift(B, pad=None, mode=mode))
+    return logical_product(A, replace(repeat_like(None, shape(A)), B, mode=mode))
   if hasattr(A, '_logical_product'):
     return A._logical_product(B)
   if is_int(A) or is_tuple(A):
@@ -305,14 +313,14 @@ def logical_divide(A, B: Tiler, *, mode=()):
 
   A non-empty `mode` divides only that mode of `A` and leaves every other mode
   unchanged, so `logical_divide[0, 1](A, B)` is `A` with mode `(0, 1)` replaced
-  by `logical_divide(get[0, 1](A), B)`. An `A` of `None` has no modes to select,
-  so `mode` names where the result lands instead, and the modes it does not name
-  are filled with `1:0`.
+  by `logical_divide(get[0, 1](A), B)`; a negative index counts from the end. An
+  `A` of `None` has no modes to select, so `mode` names where the result lands
+  instead, and the modes it does not name are filled with `1:0`.
 
   Pre-conditions:
     B divides A (the underlying composition's divisibility conditions hold);
     otherwise a ValueError is raised.
-    mode names a mode of A: rank[mode[:-1]](A) > mode[-1]
+    mode names a mode of A: -rank[mode[:-1]](A) <= mode[-1] < rank[mode[:-1]](A)
 
   Post-conditions:
     rank(get[mode](result)) == 2  when is_layout(B)
@@ -322,6 +330,7 @@ def logical_divide(A, B: Tiler, *, mode=()):
   Examples:
     logical_divide(Layout(24), Layout(4, 2))         == Layout((4, (2, 3)), (2, (1, 8)))
     logical_divide[1](Layout((3, 8)), Layout(4, 2))  == Layout((3, (4, 2)), (1, (6, 3)))
+    logical_divide[-1](Layout((3, 8)), Layout(4, 2)) == Layout((3, (4, 2)), (1, (6, 3)))
     logical_divide(None, Layout(4, 2))               == Layout((4, (2, 1)), (2, (1, 8)))
   """
   if A is None:
@@ -332,7 +341,7 @@ def logical_divide(A, B: Tiler, *, mode=()):
     B = transform_leaf(lambda b: make_layout([b, complement(b)]), B)
     return composition(None, B, mode=mode)
   if mode != ():
-    return logical_divide(A, lift(B, pad=None, mode=mode))
+    return logical_divide(A, replace(repeat_like(None, shape(A)), B, mode=mode))
   if hasattr(A, '_logical_divide'):
     return A._logical_divide(B)
   if is_int(A) or is_tuple(A):
@@ -363,7 +372,7 @@ def zipped_divide(A, B: Tiler, *, mode=()):
   `logical_divide`'s per-mode interleaving.
 
   A non-empty `mode` divides only that mode of `A` and leaves every other mode
-  unchanged.
+  unchanged; a negative index counts from the end.
 
   Post-conditions:
     rank(get[mode](result)) == 2
@@ -373,7 +382,8 @@ def zipped_divide(A, B: Tiler, *, mode=()):
   Examples:
     zipped_divide(Layout((9, 32)), (Layout(3, 3), Layout((2, 4), (1, 8))))
         == Layout(((3, (2, 4)), (3, 4)), ((3, (9, 72)), (1, 18)))
-    zipped_divide[1](Layout((5, 24)), Layout(4, 2)) == Layout((5, (4, (2, 3))), (1, (10, (5, 40))))
+    zipped_divide[1](Layout((5, 24)), Layout(4, 2))  == Layout((5, (4, (2, 3))), (1, (10, (5, 40))))
+    zipped_divide[-1](Layout((5, 24)), Layout(4, 2)) == Layout((5, (4, (2, 3))), (1, (10, (5, 40))))
   """
   return logical_divide(A, tiler_to_layout(B), mode=mode)
 

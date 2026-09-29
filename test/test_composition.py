@@ -95,12 +95,19 @@ class TestComposition:
     assert composition(A, B, mode=(0,)) == composition[0](A, B)
     assert composition(A, B, mode=()) == composition(A, B)
 
+    # A negative index counts from the end, at every depth
+    assert composition[-2](A, B) == composition[0](A, B)
+    assert composition[-1](A, Layout(5, 1)) == composition[1](A, Layout(5, 1))
+    assert composition[0, -2](A, Layout(3, 2)) == composition[0, 0](A, Layout(3, 2))
+
     # Mode 0 of a depth-0 layout is the layout itself
     assert composition[0](Layout(6, 1), Layout(3, 1)) == Layout((3,), (1,))
 
     # The named mode must exist
     with pytest.raises(ValueError):
       composition[2](A, B)
+    with pytest.raises(ValueError):
+      composition[-3](A, B)
 
     # Post-conditions hold of the composed mode
     R = composition[0](A, B)

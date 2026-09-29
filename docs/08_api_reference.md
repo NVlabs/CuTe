@@ -170,19 +170,22 @@ every other argument passes through untouched:
 op(A)                <==>  op(A, mode=())        # no mode filtering
 op[0](A)             <==>  op(A, mode=(0,))      # mode 0 of A
 op[0,1](A)           <==>  op(A, mode=(0,1))     # mode (0,1) of A
+op[-1](A)            <==>  op(A, mode=(-1,))     # the last mode of A
 op[0][1](A)          <==>  op(A, mode=(0,1))     # subscripts accumulate
 op[0](A, B)          <==>  op(A, B, mode=(0,))   # any number of arguments
 op[0](A, B, mode=1)  <==>  op(A, B, mode=(0,1))
 ```
 
 `mode` is keyword-only, so a mode is never mistaken for an argument of `op`.
+A negative index counts from the end of the mode it indexes, as for a tuple.
 
 *Examples:*
 
 ```python
-shape[1](Layout((3, (2, 4))))     == shape(Layout((3, (2, 4))), mode=(1,))
-shape[1][0](Layout((3, (2, 4))))  == 2
-size.__name__                     == 'size'
+shape[1](Layout((3, (2, 4))))      == shape(Layout((3, (2, 4))), mode=(1,))
+shape[1][0](Layout((3, (2, 4))))   == 2
+shape[-1, -1](Layout((3, (2, 4)))) == 4
+size.__name__                      == 'size'
 ```
 
 ### `get(obj, *, mode=())`
@@ -203,11 +206,15 @@ get[0, 2, 3](((0, 0, (0, 0, 0, 42)),))        == 42
 get(((0, 0, (0, 0, 0, 42)),), mode=(0, 2, 3)) == 42
 get[1](Layout((3, (2, 4)), (2, (1, 6))))      == Layout((2, 4), (1, 6))
 get[1, 0]((1, (2, 3)))                        == 2
+get[-1, -2]((1, (2, 3)))                      == 2
 ```
 
 ### `lift(obj, *, pad=0, make=tuple, mode=())`
 
 Create an object with `obj` as the `mode`-th element.
+
+A negative index counts from the end of the mode it creates, so `obj` is
+padded after rather than before: `lift[-1]` wraps `obj` alone.
 
 *Args:*
 
@@ -228,12 +235,16 @@ lift(x) is x
 ```python
 lift[0, 2, 3](42)                                         == ((0, 0, (0, 0, 0, 42)),)
 lift[1](42, pad=None)                                     == (None, 42)
+lift[-2](42, pad=None)                                    == (42, None)
+lift[-1](42)                                              == (42,)
 lift[1](Layout(4, 2), pad=Layout(1, 0), make=make_layout)  == Layout((1, 4), (0, 2))
 ```
 
 ### `replace(obj, x, *, mode=())`
 
 Create a copy of `obj` with its `mode`-th element replaced by `x`.
+
+A negative index counts from the end of the mode it names, as for a tuple.
 
 *Pre-conditions:*
 
@@ -252,9 +263,11 @@ replace(obj, x) == x
 
 ```python
 replace[1]((1, 2, 3), 42)                  == (1, 42, 3)
+replace[-1]((1, 2, 3), 42)                 == (1, 2, 42)
 replace[0, 2](((1, 2, 3), 4), 42)          == ((1, 2, 42), 4)
 replace[1](repeat_like(None, (3, 4)), 42)  == (None, 42)
 replace[3]((1, 2, 3), 42)                  -> ValueError
+replace[-4]((1, 2, 3), 42)                 -> ValueError
 ```
 
 ### `select(obj, *, mode=())`
@@ -1639,7 +1652,7 @@ Coalesce a Layout or Tensor into a maximally-merged, equivalent form while
 preserving trailing size-1 modes.
 
 A non-empty `mode` coalesces only that mode of `A` and leaves every other mode
-unchanged.
+unchanged; a negative index counts from the end.
 
 *Post-conditions:*
 
@@ -1654,6 +1667,7 @@ result(i) == A(i)   for all integers i
 ```python
 coalesce_z(Layout((2, 1, 6, 1), (1, 7, 8, 0)))     == Layout((2, 6, 1), (1, 8, 0))
 coalesce_z[1](Layout((3, (2, 6)), (1, (3, 6))))    == Layout((3, 12), (1, 3))
+coalesce_z[-1](Layout((3, (2, 6)), (1, (3, 6))))   == Layout((3, 12), (1, 3))
 ```
 
 ### `coalesce(A, profile=1, *, mode=())`
@@ -1668,7 +1682,8 @@ coordinate space changes. `profile` selects whole-layout (`1`) vs by-mode
 `tiler_to_layout`.
 
 A non-empty `mode` coalesces only that mode of `A` and leaves every other mode
-unchanged: `coalesce[1](A)` is `coalesce(A, (None, 1))`.
+unchanged: `coalesce[1](A)` is `coalesce(A, (None, 1))`, and for a rank-2 `A`
+so is `coalesce[-1](A)`, a negative index counting from the end.
 
 *Post-conditions:*
 
@@ -1686,6 +1701,7 @@ coalesce(Layout((2, 4, 6), (24, 6, 1)))            == Layout((2, 4, 6), (24, 6, 
 coalesce(Layout((2, 1, 6, 1), (1, 7, 8, 0)))       == Layout((2, 6), (1, 8))
 coalesce(Layout((2, (1, 6)), (1, (6, 2))), (1, 1)) == Layout((2, 6), (1, 2))
 coalesce[1](Layout((3, (2, 6)), (1, (3, 6))))      == Layout((3, 12), (1, 3))
+coalesce[-1](Layout((3, (2, 6)), (1, (3, 6))))     == Layout((3, 12), (1, 3))
 ```
 
 ### `composition(A, B, *, mode=())`
@@ -1702,14 +1718,14 @@ divisibility condition, and the result is the coordinates `B` itself walks,
 `tiler_to_layout(B)`.
 
 A non-empty `mode` composes only that mode of `A` and leaves every other mode
-unchanged.
+unchanged; a negative index counts from the end.
 
 *Pre-conditions:*
 
 ```
 A and B satisfy the shape- and stride-divisibility conditions
 (Whitepaper, Eqs. (20)-(21)); otherwise a ValueError is raised.
-mode names a mode of A: rank[mode[:-1]](A) > mode[-1]
+mode names a mode of A: -rank[mode[:-1]](A) <= mode[-1] < rank[mode[:-1]](A)
 ```
 
 *Post-conditions:*
@@ -1726,6 +1742,7 @@ composition(Layout((6, 2), (8, 2)), Layout((4, 3), (3, 1))) == Layout(((2, 2), 3
 composition(Layout(20, 2), Layout((5, 4), (4, 1)))          == Layout((5, 4), (8, 2))
 composition(Layout(12), Layout((4, 3)))                     == Layout((4, 3), (1, 4))
 composition[1](Layout((4, 6), (1, 4)), Layout(3, 2))        == Layout((4, 3), (1, 8))
+composition[-1](Layout((4, 6), (1, 4)), Layout(3, 2))       == Layout((4, 3), (1, 8))
 composition(None, (4, 3))                                   == Layout((4, 3), (E(0), E(1)))
 ```
 
@@ -1857,7 +1874,7 @@ via `tiler_to_layout` before `B` is applied, so a by-mode `B` sees the
 promoted Layout's modes.
 
 A non-empty `mode` reproduces only that mode of `A` over `B` and leaves every
-other mode unchanged.
+other mode unchanged; a negative index counts from the end.
 
 *Post-conditions:*
 
@@ -1875,6 +1892,8 @@ logical_product(Layout((2, 2), (4, 1)), Layout(6, 1)) == Layout(((2, 2), (2, 3))
 logical_product(Layout(3, 1), Layout(4, 1))           == Layout((3, 4), (1, 3))
 logical_product[0](Layout((3, 5), (1, 20)), Layout(4, 1))
     == Layout(((3, 4), 5), ((1, 3), 20))
+logical_product[-2](Layout((3, 5), (1, 20)), Layout(4, 1))
+    == Layout(((3, 4), 5), ((1, 3), 20))
 ```
 
 ### `logical_divide(A, B, *, mode=())`
@@ -1891,16 +1910,16 @@ An `A` of `None` is the identity of unknown extents, so `A o (B, B*)` takes the
 
 A non-empty `mode` divides only that mode of `A` and leaves every other mode
 unchanged, so `logical_divide[0, 1](A, B)` is `A` with mode `(0, 1)` replaced
-by `logical_divide(get[0, 1](A), B)`. An `A` of `None` has no modes to select,
-so `mode` names where the result lands instead, and the modes it does not name
-are filled with `1:0`.
+by `logical_divide(get[0, 1](A), B)`; a negative index counts from the end. An
+`A` of `None` has no modes to select, so `mode` names where the result lands
+instead, and the modes it does not name are filled with `1:0`.
 
 *Pre-conditions:*
 
 ```
 B divides A (the underlying composition's divisibility conditions hold);
 otherwise a ValueError is raised.
-mode names a mode of A: rank[mode[:-1]](A) > mode[-1]
+mode names a mode of A: -rank[mode[:-1]](A) <= mode[-1] < rank[mode[:-1]](A)
 ```
 
 *Post-conditions:*
@@ -1916,6 +1935,7 @@ get[mode](result)[0] == composition(get[mode](A), B)
 ```python
 logical_divide(Layout(24), Layout(4, 2))         == Layout((4, (2, 3)), (2, (1, 8)))
 logical_divide[1](Layout((3, 8)), Layout(4, 2))  == Layout((3, (4, 2)), (1, (6, 3)))
+logical_divide[-1](Layout((3, 8)), Layout(4, 2)) == Layout((3, (4, 2)), (1, (6, 3)))
 logical_divide(None, Layout(4, 2))               == Layout((4, (2, 1)), (2, (1, 8)))
 ```
 
@@ -1929,7 +1949,7 @@ together, so the result is `((tile...), (rest...))` rather than
 `logical_divide`'s per-mode interleaving.
 
 A non-empty `mode` divides only that mode of `A` and leaves every other mode
-unchanged.
+unchanged; a negative index counts from the end.
 
 *Post-conditions:*
 
@@ -1944,7 +1964,8 @@ get[mode](result)[0] == composition(get[mode](A), B)
 ```python
 zipped_divide(Layout((9, 32)), (Layout(3, 3), Layout((2, 4), (1, 8))))
     == Layout(((3, (2, 4)), (3, 4)), ((3, (9, 72)), (1, 18)))
-zipped_divide[1](Layout((5, 24)), Layout(4, 2)) == Layout((5, (4, (2, 3))), (1, (10, (5, 40))))
+zipped_divide[1](Layout((5, 24)), Layout(4, 2))  == Layout((5, (4, (2, 3))), (1, (10, (5, 40))))
+zipped_divide[-1](Layout((5, 24)), Layout(4, 2)) == Layout((5, (4, (2, 3))), (1, (10, (5, 40))))
 ```
 
 ### `blocked_product(A, B)`

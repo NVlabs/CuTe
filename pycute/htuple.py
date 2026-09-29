@@ -148,16 +148,19 @@ def ModeOpDecorator(func):
     op(A)                <==>  op(A, mode=())        # no mode filtering
     op[0](A)             <==>  op(A, mode=(0,))      # mode 0 of A
     op[0,1](A)           <==>  op(A, mode=(0,1))     # mode (0,1) of A
+    op[-1](A)            <==>  op(A, mode=(-1,))     # the last mode of A
     op[0][1](A)          <==>  op(A, mode=(0,1))     # subscripts accumulate
     op[0](A, B)          <==>  op(A, B, mode=(0,))   # any number of arguments
     op[0](A, B, mode=1)  <==>  op(A, B, mode=(0,1))
 
   `mode` is keyword-only, so a mode is never mistaken for an argument of `op`.
+  A negative index counts from the end of the mode it indexes, as for a tuple.
 
   Examples:
-    shape[1](Layout((3, (2, 4))))     == shape(Layout((3, (2, 4))), mode=(1,))
-    shape[1][0](Layout((3, (2, 4))))  == 2
-    size.__name__                     == 'size'
+    shape[1](Layout((3, (2, 4))))      == shape(Layout((3, (2, 4))), mode=(1,))
+    shape[1][0](Layout((3, (2, 4))))   == 2
+    shape[-1, -1](Layout((3, (2, 4)))) == 4
+    size.__name__                      == 'size'
   """
   class ModeOp:
 
@@ -191,6 +194,7 @@ def get(obj: HTuple, *, mode=()) -> HTuple:
     get(((0, 0, (0, 0, 0, 42)),), mode=(0, 2, 3)) == 42
     get[1](Layout((3, (2, 4)), (2, (1, 6))))      == Layout((2, 4), (1, 6))
     get[1, 0]((1, (2, 3)))                        == 2
+    get[-1, -2]((1, (2, 3)))                      == 2
   """
   if mode == ():
     return obj
@@ -203,6 +207,9 @@ def get(obj: HTuple, *, mode=()) -> HTuple:
 def lift(obj: HTuple, *, pad=0, make=tuple, mode=()) -> HTuple:
   """
   Create an object with `obj` as the `mode`-th element.
+
+  A negative index counts from the end of the mode it creates, so `obj` is
+  padded after rather than before: `lift[-1]` wraps `obj` alone.
 
   Args:
     obj: The object to place at `mode`
@@ -217,11 +224,13 @@ def lift(obj: HTuple, *, pad=0, make=tuple, mode=()) -> HTuple:
   Examples:
     lift[0, 2, 3](42)                                         == ((0, 0, (0, 0, 0, 42)),)
     lift[1](42, pad=None)                                     == (None, 42)
+    lift[-2](42, pad=None)                                    == (42, None)
+    lift[-1](42)                                              == (42,)
     lift[1](Layout(4, 2), pad=Layout(1, 0), make=make_layout)  == Layout((1, 4), (0, 2))
   """
   result = obj
   for i in reversed(mode):
-    result = make((pad,) * i + (result,))
+    result = make((pad,) * i + (result,) if i >= 0 else (result,) + (pad,) * (-i - 1))
   return result
 
 
@@ -229,6 +238,8 @@ def lift(obj: HTuple, *, pad=0, make=tuple, mode=()) -> HTuple:
 def replace(obj: HTuple, x: HTuple, *, mode=()) -> HTuple:
   """
   Create a copy of `obj` with its `mode`-th element replaced by `x`.
+
+  A negative index counts from the end of the mode it names, as for a tuple.
 
   Pre-conditions:
     `mode` names an existing element of `obj`; otherwise a ValueError is raised
@@ -239,15 +250,18 @@ def replace(obj: HTuple, x: HTuple, *, mode=()) -> HTuple:
 
   Examples:
     replace[1]((1, 2, 3), 42)                  == (1, 42, 3)
+    replace[-1]((1, 2, 3), 42)                 == (1, 2, 42)
     replace[0, 2](((1, 2, 3), 4), 42)          == ((1, 2, 42), 4)
     replace[1](repeat_like(None, (3, 4)), 42)  == (None, 42)
     replace[3]((1, 2, 3), 42)                  -> ValueError
+    replace[-4]((1, 2, 3), 42)                 -> ValueError
   """
   if mode == ():
     return x
   obj = wrap(obj)
-  if mode[0] >= len(obj): raise ValueError(f"replace({obj}, {x}, {mode}): no mode {mode[0]}")
-  return tuple(replace(o, x, mode=mode[1:]) if i == mode[0] else o for i,o in enumerate(obj))
+  if not -len(obj) <= mode[0] < len(obj): raise ValueError(f"replace({obj}, {x}, {mode}): no mode {mode[0]}")
+  m = mode[0] % len(obj)
+  return tuple(replace(o, x, mode=mode[1:]) if i == m else o for i,o in enumerate(obj))
 
 
 @ModeOpDecorator

@@ -70,6 +70,10 @@ class TestLogicalProduct:
     assert logical_product(A, B, mode=(0,)) == logical_product[0](A, B)
     assert logical_product(A, B, mode=()) == logical_product(A, B)
 
+    # A negative index counts from the end
+    assert logical_product[-1](A, B) == logical_product[1](A, B)
+    assert logical_product[-2](A, B) == logical_product[0](A, B)
+
     # Post-conditions hold of the reproduced mode
     R = logical_product[0](A, B)
     assert rank(get[0](R)) == 2
@@ -79,6 +83,8 @@ class TestLogicalProduct:
     # The named mode must exist
     with pytest.raises(ValueError):
       logical_product[2](A, B)
+    with pytest.raises(ValueError):
+      logical_product[-3](A, B)
 
 
   def test_logical_product_types(self):
@@ -95,9 +101,11 @@ class TestLogicalProduct:
       logical_product(6, (Layout(2,1), Layout(2,1)))
 
     # -- A = None: unsupported; unlike logical_divide there is no identity to
-    #    reproduce, and tiler_to_layout(None) is undefined
+    #    reproduce, and tiler_to_layout(None) is undefined -- with a mode too
     with pytest.raises(TypeError):
       logical_product(None, Layout(2,1))
+    with pytest.raises(TypeError):
+      logical_product[1](None, Layout(2,1))
 
     # -- A = Tensor: unsupported; logical_product has no Tensor hook
     with pytest.raises(TypeError):
