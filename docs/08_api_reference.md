@@ -10,7 +10,7 @@ links to the source and to the tests that exercise it.
 The reference is organized by module:
 
 * [`htuple`](#module-htuple) — `is_tuple`, `profile`, `congruent`, `weakly_congruent`, `wrap`, `unwrap`, `ModeOpDecorator`, `get`, `lift`, `replace`, `select`, `transform_apply_leaf`, `transform_leaf`, `leaves`, `zip_leaves`, `fold_leaf`, `flatten`, `unflatten`, `repeat_like`, `product`, `product_each`, `slice_`, `dice_`
-* [`typedefs`](#module-typedefs) — `Integer`, `register_integer_type`, `is_int`, `is_static`, `divmod`, `StrideScalar`, `is_stride_scalar`, `HTuple`, `Profile`, `IntTuple`, `Shape`, `Coord`, `Stride`
+* [`typedefs`](#module-typedefs) — `Integer`, `register_integer_type`, `is_int`, `is_static`, `static_true`, `divmod`, `StrideScalar`, `is_stride_scalar`, `HTuple`, `Profile`, `IntTuple`, `Shape`, `Coord`, `Stride`
 * [`stride`](#module-stride) — `stride`, `inner_product`, `prefix_product`, `coshape`, `coprofile`
 * [`shape`](#module-shape) — `shape`, `size`, `rank`, `depth`, `compatible`, `common_refinement`, `common_coarsening`, `idx2crd`, `crd2idx`, `coordinates`, `in_bounds`
 * [`atuple`](#module-atuple) — `ArithTuple`, `ScaledBasis`, `E`, `V`, `basis_repr`, `is_basis`, `make_basis_like`, `proj`, `unit`, `as_tuple`
@@ -607,6 +607,28 @@ symbol, is therefore dynamic, because its `int()` raises.
 is_static(7)        == True
 is_static(F2(3))    == True
 is_static(1.0)      == False
+```
+
+### `static_true(b)`
+
+True iff the predicate `b` is always statically decided to be True.
+
+Deciding by identity -- `b is True` -- would be stricter but
+`sympy` answers `0 < 1` with its own `BooleanTrue`, and 
+`numpy` answers `4 == 4` with `np.True_`.
+
+Two forms agree on every decided predicate and differ on undecided ones:
+
+```
+`if static_true(x != 0): ...`      undecided *does not* take the branch
+`if not static_true(x == 0): ...`  undecided *does* take the branch
+```
+
+*Examples:*
+
+```python
+static_true(4 == 4)   == True
+static_true(4 == 5)   == False
 ```
 
 ### `divmod(a, b)`
@@ -1524,7 +1546,8 @@ follow the ordering induced by `layout`'s strides.
 The mode with the smallest non-zero source stride receives stride 1, and the
 remaining non-zero modes receive compact (prefix-product) strides in stable
 ascending order of the source stride magnitudes. Modes that carry no positional
-information -- a size-1 shape or a static stride of 0 -- are pinned to stride 0.
+information -- a size-1 shape, or a stride known to be 0 -- are pinned to
+stride 0.
 
 Only static strides can be ordered by magnitude; symbolic (non-static) strides
 are considered larger than every static stride.
@@ -1799,7 +1822,10 @@ d_0 < d_1 < ... with sizes s_0, s_1, ..., each stride divides the
 next (d_{k-1} | d_k) and satisfies (d_k >= d_{k-1} * s_{k-1}).
 This is sufficient but not necessary for injectivity, so a ValueError is
 raised both for non-injective A (overlapping strides) and for the injective
-layouts whose strides cannot be chained (e.g. coprime strides).
+layouts whose strides cannot be chained (e.g. coprime strides). The chain
+must be *shown* to hold, so extents known only at run time are refused too:
+unlike `right_inverse`, there is no smaller-but-still-valid answer to
+return instead.
 
 A gap between strides becomes an extent of the result, so the codomain's
 stride quotients must be Integers. `F2`'s quotient is a carry-less one, so an
@@ -1843,8 +1869,10 @@ stride `d_k` (modes ordered by stride as `d_0 <= d_1 <= ...` with sizes `s_k`):
 
 ```
 A's nonzero strides are non-overlapping (injective): each
-`d_k >= d_{k-1} * s_{k-1}`. Enforced where statically decidable; otherwise a
-ValueError is raised.
+`d_k >= d_{k-1} * s_{k-1}`. A ValueError is raised unless this can be
+*shown*, so a pair of strides whose order is not decidable is refused
+rather than assumed. Note that `logical_divide` complements the tiler,
+not the tensor, so a layout with run-time extents still divides.
 ```
 
 *Post-conditions:*

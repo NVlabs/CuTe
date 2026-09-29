@@ -351,4 +351,8 @@ def in_bounds(crd: Coord, shape: Shape) -> bool:
     in_bounds((1, (0, 7)), (4, (2, 8))) == True
     in_bounds((1, (2, 7)), (4, (2, 8))) == False
   """
-  return all(0 <= c < s for c, s in zip_leaves(idx2crd(crd, shape), shape))
+  # return all(0 <= c < s for c, s in zip_leaves(idx2crd(crd, shape), shape))
+  # The version above raises when a coordinate or extent is known only at run time.
+  return reduce(operator.and_,
+                [(0 <= c) & (c < s) for c, s in zip_leaves(idx2crd(crd, shape), shape)],
+                True)

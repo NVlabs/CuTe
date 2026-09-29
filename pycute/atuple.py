@@ -29,9 +29,12 @@ Pretty printing is hybrid: a single nonzero leaf renders in the basis form
 `value@p_n@...@p_0`, everything else as a Python tuple.
 """
 
+from functools import reduce
 from itertools import zip_longest
+import operator
 
-from .typedefs import is_int, is_static, is_stride_scalar, Integer, StrideScalar
+from .typedefs import (is_int, is_static, is_stride_scalar, static_true,
+                       Integer, StrideScalar)
 from .htuple import is_tuple, get, lift
 from .shape import idx2crd
 
@@ -43,12 +46,14 @@ def _colex_lt(A, B):
   Walks the dense view from the highest position downward, deferring to the
   leaf type's own ordering; raises on rank mismatch (a nonzero leaf compared
   with an ArithTuple).
+
+  Rank compatibility demands static proof that the scalar is zero.
   """
   if not isinstance(A, ArithTuple) and not isinstance(B, ArithTuple):
     return A < B
-  if not isinstance(A, ArithTuple) and A != 0:
+  if not isinstance(A, ArithTuple) and not static_true(A == 0):
     raise ValueError(f"colex_lt: rank-incompatible {A!r} < {B!r}")
-  if not isinstance(B, ArithTuple) and B != 0:
+  if not isinstance(B, ArithTuple) and not static_true(B == 0):
     raise ValueError(f"colex_lt: rank-incompatible {A!r} < {B!r}")
   A_data = A.data if isinstance(A, ArithTuple) else ()
   B_data = B.data if isinstance(B, ArithTuple) else ()
@@ -76,7 +81,11 @@ def _atuple_eq(A, B):
     return A == B
   a, b = view(A), view(B)
   if a is None or b is None: return False
-  return all(_atuple_eq(x, y) for x, y in zip_longest(a, b, fillvalue=0))
+  # return all(_atuple_eq(x, y) for x, y in zip_longest(a, b, fillvalue=0))
+  # The version above raises when a leaf value is known only at run time.
+  return reduce(operator.and_,
+                [_atuple_eq(x, y) for x, y in zip_longest(a, b, fillvalue=0)],
+                True)
 
 # =====================================================================
 # ArithTuple
@@ -163,7 +172,7 @@ class ArithTuple(StrideScalar):
       return NotImplemented
     other = ArithTuple(other)          # lift / passthrough
     if not isinstance(other, ArithTuple):
-      if other == 0:
+      if static_true(other == 0):
         return self                    # additive identity, of any leaf algebra
       raise TypeError(f"ArithTuple Incompatibility: {self} + {other}")
     return ArithTuple._set([a + b for a, b in zip_longest(self.data, other.data, fillvalue=0)])
@@ -176,7 +185,7 @@ class ArithTuple(StrideScalar):
       return NotImplemented
     other = ArithTuple(other)          # lift / passthrough
     if not isinstance(other, ArithTuple):
-      if other == 0:
+      if static_true(other == 0):
         return self
       raise TypeError(f"ArithTuple Incompatibility: {self} - {other}")
     return ArithTuple._set([a - b for a, b in zip_longest(self.data, other.data, fillvalue=0)])
@@ -233,8 +242,9 @@ class ArithTuple(StrideScalar):
     return NotImplemented
 
   def __ne__(self, other):
+    # Negated with `^ True` rather than `not` in consideration of dynamic values
     eq = self.__eq__(other)
-    return eq if eq is NotImplemented else not eq
+    return eq if eq is NotImplemented else eq ^ True
 
   def __lt__(self, other):
     return _colex_lt(self, ArithTuple(other))
@@ -397,7 +407,7 @@ def basis_repr(x):
     if isinstance(y, ArithTuple):
       for i, c in enumerate(y.data):
         yield from walk(c, prefix + (i,))
-    elif is_stride_scalar(y) and y != 0:
+    elif is_stride_scalar(y) and not static_true(y == 0):
       yield (y, prefix)
   result = list(walk(x, ()))
   return result if result else [(0, ())]

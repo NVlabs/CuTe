@@ -56,8 +56,9 @@ class F2(StrideScalar):
     return NotImplemented
 
   def __ne__(self, other):
+    # Negated with `^ True` rather than `not` in consideration of dynamic values
     eq = self.__eq__(other)
-    return eq if eq is NotImplemented else not eq
+    return eq if eq is NotImplemented else eq ^ True
 
   # Ordering is by the underlying value, so `F2`s order by leading bit first and
   # by their lower-order terms only to break ties -- i.e. by the bit-field a

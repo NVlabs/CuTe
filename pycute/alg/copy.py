@@ -27,7 +27,7 @@ that of `pycute.alg.ref.copy`, down to element-at-a-time in the worst case.
 from __future__ import annotations
 
 from pycute import (Tensor, size, stride, coalesce, greatest_common_domain,
-                    logical_divide, nullspace, right_inverse)
+                    logical_divide, nullspace, right_inverse, static_true)
 
 from .ref.copy import copy as _memcpy
 
@@ -51,9 +51,9 @@ def copy(src: Tensor, dst: Tensor) -> None:
   src_n = logical_divide[0](src_c, null_dst)  # ((Null, NonNull), InCompat)
   dst_n = logical_divide[0](dst_c, null_dst)  # ((Null, NonNull), InCompat)
 
-  if dst_n.layout[0][0](size(null_dst) - 1) != 0:
+  if not static_true(dst_n.layout[0][0](size(null_dst) - 1) == 0):
     raise ValueError(f"Sanity: nullspace definition error")
-  if src_n.layout[0][0](size(null_dst) - 1) != 0:
+  if not static_true(src_n.layout[0][0](size(null_dst) - 1) == 0):
     raise ValueError(f"Write-after-write error detected in dst: {dst}")
 
   # Slice the common stride-0 modes out
@@ -72,7 +72,7 @@ def copy(src: Tensor, dst: Tensor) -> None:
   try:
     vec_size = 1
     src_dst_v = coalesce(src_v.layout[0][0])[0]
-    if stride(src_dst_v) == 1:
+    if static_true(stride(src_dst_v) == 1):
       vec_size = size(src_dst_v)
   except TypeError:
     pass

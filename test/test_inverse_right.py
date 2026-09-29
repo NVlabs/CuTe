@@ -168,6 +168,41 @@ class TestRightInverse:
     assert right_inverse(Layout((M, N), (DM, DN))) == Layout(1, 0)
     assert right_inverse(Layout((N, 4), (1, N))) == Layout(4*N, 1)
 
+    # Stride order reversed: the concrete stride is walked first, so the
+    # recovered modes arrive transposed and do not coalesce.
+    assert right_inverse(Layout((N, M), (M, 1))) == Layout((M, N), (N, 1))
+
+    # Where a left inverse must refuse, a right inverse may return a *smaller*
+    # one and still be valid -- it only has to invert what it covers. The chain
+    # stops where it can no longer be continued, and what it reached is kept.
+    assert right_inverse(Layout((N, M), (1, 2*N))) == Layout(N, 1)   # gap breaks it
+    assert right_inverse(Layout((N, 2), (1, 1))) == Layout(N, 1)     # non-injective
+    assert right_inverse(Layout(N, 0)) == Layout(1, 0)               # nothing to invert
+    assert right_inverse(Layout((N, M), (0, N))) == Layout(1, 0)
+
+  def specialize(self, L, values):
+    """`L` with each symbolic leaf replaced by its value in `values`."""
+    concrete = lambda x: int(x.subs(values)) if hasattr(x, "subs") else x
+    return Layout(transform_leaf(concrete, shape(L)),
+                  transform_leaf(concrete, stride(L)))
+
+  def test_right_inverse_sympy_specializes(self):
+    # The symbolic inverse must be an inverse for *every* value its symbols can
+    # take, so substituting concrete extents into both the layout and its
+    # symbolic inverse has to satisfy the right inverse post-condition.
+    N, M, X = sympy.symbols("N M X", positive=True, integer=True)
+
+    for L in [Layout(N, 1), Layout((4, N), (1, 4)), Layout((N, M), (1, N)),
+              Layout((N, M), (M, 1)), Layout((N, M), (1, 2*N)),
+              Layout((N, 2), (1, 1)), Layout(N, X)]:
+      L_inv = right_inverse(L)
+      for values in ({N: 1, M: 1, X: 1}, {N: 2, M: 3, X: 2},
+                     {N: 3, M: 2, X: 5}, {N: 5, M: 4, X: 3}):
+        Lc, Lc_inv = self.specialize(L, values), self.specialize(L_inv, values)
+        assert weakly_congruent(coprofile(Lc), shape(Lc_inv))
+        for i in range(size(Lc_inv)):
+          assert Lc(Lc_inv(i)) == i
+
   def test_right_inverse_sympy_substitution(self):
     # Substituting concrete values into each symbolic right inverse must yield
     # a valid right inverse of the substituted layout, i.e. L(R(i)) == i.

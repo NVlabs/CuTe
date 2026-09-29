@@ -286,3 +286,6 @@ class TestComposition:
     N, X, Y = sympy.symbols("N X Y", positive=True, integer=True)
     with pytest.raises(ValueError, match="Shape divisibility"):
       composition(Layout((N, 8), (X, Y)), Layout(4, 1))
+
+    with pytest.raises(ValueError, match="Shape divisibility"):
+      composition(Layout((X, Y), (Y, 1)), Layout(64, 1))

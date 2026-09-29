@@ -129,7 +129,7 @@ class Layout(LayoutBase):
     `(offset, sublayout)`. `None` entries in `crd` mark the modes retained in the
     sublayout.
     """
-    crd = transform_leaf(lambda x: None if x == slice(None) else x, crd)
+    crd = transform_leaf(lambda x: None if isinstance(x, slice) and x == slice(None) else x, crd)
     return (self(crd), Layout._set(slice_(crd, self.shape), slice_(crd, self.stride)))
 
   def __getitem__(self, i: Integer | slice) -> Layout:
@@ -204,7 +204,7 @@ class Layout(LayoutBase):
     new_s, new_d = _coalesce_z(self.shape, self.stride)
     if new_s == ():
       return Layout._set(1, 0)
-    if len(new_s) > 1 and new_s[-1] == 1:
+    if len(new_s) > 1 and static_true(new_s[-1] == 1):
       return Layout._set(unwrap(new_s[:-1]), unwrap(new_d[:-1]))
     return Layout._set(unwrap(new_s), unwrap(new_d))
 
@@ -228,9 +228,9 @@ class Layout(LayoutBase):
 
     if is_tuple(B.shape):   # RHS distributive, A o (X,Y,...) => (A o X, A o Y, ...)
       return make_layout(A._composition(b) for b in B)
-    if B.stride == 0:       # Special case stride-0, A o N:0 => N:0
+    if static_true(B.stride == 0):  # Special case stride-0, A o N:0 => N:0
       return Layout._set(B.shape, 0)
-    if B.shape == 1:        # Special case shape-1, A o 1:M => 1:A(M)
+    if static_true(B.shape == 1):   # Special case shape-1, A o 1:M => 1:A(M)
       return Layout._set(B.shape, A(B.stride))
 
     #
@@ -247,7 +247,7 @@ class Layout(LayoutBase):
       # "Divide out" the first strideB elements of A.
       while len(result_s) > 1:
         qDS, rDS = divmod(strideB, result_s[0])
-        if rDS != 0:
+        if not static_true(rDS == 0):
           break
         strideB = qDS                            # Step past a whole mode
         result_s, result_d = result_s[1:], result_d[1:]
@@ -256,20 +256,20 @@ class Layout(LayoutBase):
       result_d[0] *= strideB
       if len(result_s) > 1:
         qSD, rSD = divmod(result_s[0], strideB)
-        if rSD == 0 and qSD > 0:
+        if static_true(rSD == 0) and static_true(qSD > 0):
           result_s[0] = qSD
-        elif qSD < B.shape - 1:                  # It reaches past this mode's extent
+        elif not static_true(qSD >= B.shape - 1):  # It reaches past this mode's extent
           raise ValueError(f"Stride divisibility condition violated: composition({self}, {B})")
 
       # "Keep" the first B.shape elements of what remains.
       result_s[-1] = B.shape
       for i in range(len(result_s)-1):
         result_s[-1], rES = divmod(result_s[-1], result_s[i])
-        if result_s[-1] == 0:                    # This mode covers what is left
+        if static_true(result_s[-1] == 0):       # This mode covers what is left
           result_s[i] = rES
           result_s, result_d = result_s[:i+1], result_d[:i+1]
           break
-        if rES != 0:
+        if not static_true(rES == 0):
           raise ValueError(f"Shape divisibility condition violated: composition({self}, {B})")
 
       # Accumulate into resultL
@@ -295,23 +295,32 @@ class Layout(LayoutBase):
 
     def invert_axis(e):
       """Invert the single codomain axis `e` by following its chain of strides."""
-      curr_d = next((unit(de) for de in flat_d if de != 0 and unit(de) == e), e)
+      curr_d = next((unit(de) for de in flat_d
+                     if not static_true(de == 0) and unit(de) == e), e)
       one    = proj(curr_d, curr_d)         # `1` or `F2(1)`
       result_s, result_d = [], []
 
       for de, s, pps in chain:
-        if de == 0 or s == 1:               # Carries no positional information
-          continue
+        if static_true(de == 0) or static_true(s == 1):
+          continue                          # Carries no positional information
 
         # Back-substitution can undo a residue that cancels itself, so this tests
         # whether the residue is its own additive inverse -- XOR is,
         # integer addition is not.
         residue = curr_d - de
-        if residue + residue != 0 or (s - 1) * residue >= curr_d:
+        if not static_true(residue + residue == 0):
           continue                          # Off-chain: the image stops being contiguous
 
+        # How far this mode carries the residue. A zero residue carries it
+        # nowhere whatever `s` is, which has to be said separately: for a `s`
+        # known only at run time, `(s - 1) * residue` is another run-time value
+        # even when `residue` is zero, and would lose an on-chain mode.
+        reach = residue if static_true(residue == 0) else (s - 1) * residue
+        if not static_true(reach < curr_d):
+          continue
+
         stride = pps * one                  # This chain stride's domain index,
-        if residue != 0:                    # corrected for the part already covered
+        if not static_true(residue == 0):   # corrected for the part already covered
           stride += inner_product(idx2crd(residue, result_s), result_d)
 
         result_s.append(s)
@@ -332,18 +341,27 @@ class Layout(LayoutBase):
     curr_S   = unflatten(iter(lambda: [1], -1), coprof)
 
     flat_s, flat_d = _coalesce_z(self.shape, self.stride)
-    for de, s, pps in sorted(zip(flat_d, flat_s, prefix_product(flat_s))):
+
+    # The chain is followed in stride order, and only static (concrete) strides
+    # can be ordered, so a symbolic stride is filtered past the sort -- as in
+    # `_right_inverse`, `_complement` and `make_layout_like`. Ordering by the
+    # comparison itself would need a *total* order, which an undecidable pair
+    # cannot give.
+    def _stride_key(dsp):
+      return (0, dsp[0]) if is_static(dsp[0]) else (1, 0)
+
+    for de, s, pps in sorted(zip(flat_d, flat_s, prefix_product(flat_s)), key=_stride_key):
       d = proj(de, de)
       result_s = proj(result_S, de)
       result_d = proj(result_D, de)
       curr_s   = proj(curr_S,   de)
 
-      if d == 0 or s == 1:                  # Stride-0 / size-1 modes carry no information
-        continue
+      if static_true(d == 0) or static_true(s == 1):
+        continue                            # Stride-0 / size-1 modes carry no information
       gap, rem = divmod(d, curr_s[0])       # gap = d_k / d_{k-1}, the span to the next stride
-      if rem != 0:
+      if not static_true(rem == 0):
         raise ValueError(f"left_inverse({self}): Strides do not form an ordered chain")
-      if gap < result_s[-1]:                # d_k must clear the previous mode: d_k >= d_{k-1} * s_{k-1}
+      if not static_true(gap >= result_s[-1]):  # d_k must clear the previous mode
         raise ValueError(f"left_inverse({self}): Non-injective layout")
 
       result_s[-1] = gap                    # Pad the previous mode out to d_k (the extra entries are holes)
@@ -377,11 +395,9 @@ class Layout(LayoutBase):
       result_s = proj(result_S, de)
       result_d = proj(result_D, de)
 
-      if d == 0 or s == 1:
+      if static_true(d == 0) or static_true(s == 1):
         continue
-      # The injectivity precondition is enforced only where it is statically
-      # decidable; a symbolic stride or running position is taken on faith.
-      if is_static(d) and is_static(result_d[-1]) and d < result_d[-1]:
+      if not static_true(d >= result_d[-1]):
         raise ValueError(f"complement({self}): Non-injective layout in complement")
 
       result_s.append(d // result_d[-1])
@@ -390,8 +406,8 @@ class Layout(LayoutBase):
     result = transform_leaf(lambda c,rs,rd: Layout._set(tuple(rs+[1]), tuple(rd))._coalesce_z(), coprof, result_S, result_D)
     result = tiler_to_layout(result)
 
-    # If extend is provided, extend the result
-    if extend:
+    # If extend is provided, extend the result.
+    if extend is not None:
       def extend_complement(_, shapeC, strideC, shapeA, strideA):
         if shapeC is None:
           return Layout._set(shapeA, strideA)
@@ -418,7 +434,7 @@ class Layout(LayoutBase):
     Nullspace of this Layout.
     """
     fstride = flatten(self.stride)
-    iseq = [i for i,d in enumerate(fstride) if d == 0]
+    iseq = [i for i,d in enumerate(fstride) if static_true(d == 0)]
     if len(iseq) == 0:
       return Layout._set(1, 0)
     fshape = flatten(self.shape)
@@ -463,7 +479,8 @@ def make_layout_like(layout: Layout) -> Layout:
   The mode with the smallest non-zero source stride receives stride 1, and the
   remaining non-zero modes receive compact (prefix-product) strides in stable
   ascending order of the source stride magnitudes. Modes that carry no positional
-  information -- a size-1 shape or a static stride of 0 -- are pinned to stride 0.
+  information -- a size-1 shape, or a stride known to be 0 -- are pinned to
+  stride 0.
 
   Only static strides can be ordered by magnitude; symbolic (non-static) strides
   are considered larger than every static stride.
@@ -488,7 +505,7 @@ def make_layout_like(layout: Layout) -> Layout:
   result_d = [0] * len(flat_s)
   current  = 1
   for d, s, i in sorted(zip(flat_d, flat_s, range(len(flat_s))), key=_stride_key):
-    if (is_static(d) and d == 0):
+    if static_true(d == 0):
       continue                # leave result stride at 0
     result_d[i] = current
     current    *= s

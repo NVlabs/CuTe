@@ -181,7 +181,10 @@ def left_inverse(A):
     next (d_{k-1} | d_k) and satisfies (d_k >= d_{k-1} * s_{k-1}).
     This is sufficient but not necessary for injectivity, so a ValueError is
     raised both for non-injective A (overlapping strides) and for the injective
-    layouts whose strides cannot be chained (e.g. coprime strides).
+    layouts whose strides cannot be chained (e.g. coprime strides). The chain
+    must be *shown* to hold, so extents known only at run time are refused too:
+    unlike `right_inverse`, there is no smaller-but-still-valid answer to
+    return instead.
 
     A gap between strides becomes an extent of the result, so the codomain's
     stride quotients must be Integers. `F2`'s quotient is a carry-less one, so an
@@ -225,8 +228,10 @@ def complement(A, extend: Shape = None):
 
   Pre-conditions:
     A's nonzero strides are non-overlapping (injective): each
-    `d_k >= d_{k-1} * s_{k-1}`. Enforced where statically decidable; otherwise a
-    ValueError is raised.
+    `d_k >= d_{k-1} * s_{k-1}`. A ValueError is raised unless this can be
+    *shown*, so a pair of strides whose order is not decidable is refused
+    rather than assumed. Note that `logical_divide` complements the tiler,
+    not the tensor, so a layout with run-time extents still divides.
 
   Post-conditions:
     weakly_congruent(coprofile(A), result)
@@ -496,7 +501,7 @@ def layout_add(A: Layout, B: Layout) -> Layout:
   if A is None: return B
   if not (is_layout(A) and is_layout(B)):
     raise TypeError(f"layout_add: arguments must be Layouts (got {type(A)} and {type(B)})")
-  if size(A) != size(B):
+  if not static_true(size(A) == size(B)):
     raise ValueError(f"layout_add: size mismatch size(A)={size(A)} vs size(B)={size(B)}")
 
   # Reduce A and B to canonical form so that greatest_common_domain (which
@@ -506,7 +511,7 @@ def layout_add(A: Layout, B: Layout) -> Layout:
   B_co = coalesce(B)
   G = greatest_common_domain(A_co, B_co)
 
-  if size(G) != size(A):
+  if not static_true(size(G) == size(A)):
     raise ValueError(
       f"layout_add: A and B have no common refinement of size {size(A)}: "
       f"greatest_common_domain({A_co}, {B_co}) = {G} (size {size(G)})"

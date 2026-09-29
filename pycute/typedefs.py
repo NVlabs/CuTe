@@ -107,6 +107,29 @@ def is_static(x) -> bool:
     return False
 
 
+def static_true(b) -> bool:
+  """
+  True iff the predicate `b` is always statically decided to be True.
+
+  Deciding by identity -- `b is True` -- would be stricter but
+  `sympy` answers `0 < 1` with its own `BooleanTrue`, and 
+  `numpy` answers `4 == 4` with `np.True_`.
+
+  Two forms agree on every decided predicate and differ on undecided ones:
+
+    `if static_true(x != 0): ...`      undecided *does not* take the branch
+    `if not static_true(x == 0): ...`  undecided *does* take the branch
+
+  Examples:
+    static_true(4 == 4)   == True
+    static_true(4 == 5)   == False
+  """
+  try:
+    return bool(b)
+  except Exception:
+    return False
+
+
 def divmod(a, b):
   """
   Quotient and remainder `(a // b, a % b)`, with an overridable fast path.

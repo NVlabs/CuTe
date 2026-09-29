@@ -153,20 +153,25 @@ def _coalesce_z(shape: Shape, stride: Stride) -> tuple[Shape, Stride]:
   can read back. (1) and (2) are cheaper still and reject nearly every pair, so
   they run first and gate the two multiplications (3) costs.
 
+  Every check is read through `static_true`, so a pair whose extents are only
+  known at run time is left unmerged rather than merged on an undecided
+  predicate. Declining to merge is always sound -- it returns a longer but
+  equivalent layout.
+
   Pre-conditions:
     congruent(shape, stride)
   """
   result_s = []                                           # Accumulated shapes
   result_d = []                                           # Accumulated strides
   for s_b, d_b in zip(leaves(shape), leaves(stride)):
-    while result_s and result_s[-1] == 1:                 # Drop trailing size-1 modes
+    while result_s and static_true(result_s[-1] == 1):    # Drop trailing size-1 modes
       result_s.pop()
       result_d.pop()
     if result_s:
       s_a, d_a = result_s[-1], result_d[-1]
-      if (s_a * d_a == d_b                                # Linearity at (0, 1)
-          and (s_a - 1) * d_a + d_b == (2 * s_a - 1) * d_a
-          and (s_ab := s_a * s_b) == s_a * s_b):          # Reject an opaque product
+      if (static_true(s_a * d_a == d_b)                   # Linearity at (0, 1)
+          and static_true((s_a - 1) * d_a + d_b == (2 * s_a - 1) * d_a)
+          and static_true((s_ab := s_a * s_b) == s_a * s_b)):  # Reject an opaque product
         result_s[-1] = s_ab                               # Merge mergeable modes
         continue
     result_s.append(s_b)                                  # Else, Append
