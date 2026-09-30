@@ -137,14 +137,16 @@ root: when `pycute` is not importable it walks up from the kernel's working
 directory to the checkout and puts that on `sys.path`, so a bare
 `jupyter notebook` works without installing anything.
 
-Unit coverage for both loops lives in `test/test_alg_copy.py`.
+Unit coverage for both loops lives in `test/test_alg_copy.py`, which also runs
+every copy the notebook shows against the reference, pins its Stage 3 table,
+and checks that its stored source listings are current.
 
 ## `algorithms/gemm.ipynb`
 
-Walkthrough of the GEMM algorithm (Whitepaper §2.6.2), every cell of which
-calls [`pycute.alg.ref.gemm`](../pycute/alg/ref/gemm.py): the BLAS transpose
-variants as a stride choice rather than an algorithm choice, tensor folding and
-the `einsum` applications reviewed above, and then CONV.
+Walkthrough of the GEMM algorithm (Whitepaper §2.6.2), in which every
+application is one call to [`pycute.alg.ref.gemm`](../pycute/alg/ref/gemm.py):
+the BLAS transpose variants as a stride choice rather than an algorithm choice,
+tensor folding and the `einsum` applications reviewed above, and then CONV.
 
 The CONV half is a tutorial on implicit GEMM, built on
 [`im2col.py`](im2col.py) above: N-D stencils, traversal stride, dilation,
@@ -156,6 +158,10 @@ data movement anywhere.
 pip install -e ".[viz]"   # optional inline SVG layout figures
 jupyter notebook examples/algorithms/gemm.ipynb
 ```
+
+Like `copy.ipynb` it runs from any directory in the checkout, walking up to the
+repository root when `examples` is not importable. `test/test_alg_gemm.py`
+checks that its stored source listings are current.
 
 ## Adding an example
 

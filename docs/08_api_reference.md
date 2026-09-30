@@ -2665,6 +2665,7 @@ table is generated from those.
 | Test | What it checks |
 |---|---|
 | [`test_alg_copy.py`](../test/test_alg_copy.py) | Unit tests for pycute.alg.copy and pycute.alg.ref.copy |
+| [`test_alg_gemm.py`](../test/test_alg_gemm.py) | Tests for examples/algorithms/gemm.ipynb, the walkthrough of pycute.alg.ref.gemm |
 | [`test_atuple.py`](../test/test_atuple.py) | Unit tests for pycute.atuple |
 | [`test_blocked_raked.py`](../test/test_blocked_raked.py) | Unit tests for pycute.blocked_product and pycute.raked_product |
 | [`test_coalesce.py`](../test/test_coalesce.py) | Unit tests for pycute.coalesce |

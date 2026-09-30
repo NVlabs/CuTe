@@ -75,20 +75,25 @@ def _writes(copy_fn, src_layout, dst_layout) -> tuple[list, list]:
   return dst.accessor.log, _flat_values(dst)
 
 
-# The applications of Table 2 (Whitepaper §2.6.1), as walked through in
-# examples/algorithms/copy.ipynb.
+# Every copy examples/algorithms/copy.ipynb runs -- its Table 2 applications
+# (Whitepaper §2.6.1), then its Stage 3 cases -- and a rank-1 to rank-2 reshape.
 APPLICATIONS = [
-  ("memcpy",       Layout(8, 1),                       Layout(8, 1)),
-  ("transpose",    Layout((4, 8), (8, 1)),             Layout((4, 8), (1, 4))),
-  ("gather",       Layout((2, 3), (4, 1)),             Layout(6, 1)),
-  ("scatter",      Layout(6, 1),                       Layout((2, 3), (4, 1))),
-  ("broadcast",    Layout(7, 0),                       Layout(7, 1)),
-  ("constant",     Layout(7, 0),                       Layout(7, 0)),
-  ("hierarchical", Layout((4, (2, 3)), (1, (4, 12))),  Layout((4, 6), (1, 4))),
-  ("subdomain",    Layout((4, 3, 5), (1, 7, 42)),      Layout((6, 10), (1, 9))),
-  ("coprime",      Layout((5, 7), (7, 1)),             Layout((7, 5), (5, 1))),
-  ("rank1 to 2",   Layout(12, 1),                      Layout((3, 4), (4, 1))),
-  ("part. bcast",  Layout((5, 4), (0, 1)),             Layout((5, 4), (4, 1))),
+  ("memcpy",           Layout(8, 1),                       Layout(8, 1)),
+  ("transpose",        Layout((4, 8), (8, 1)),             Layout((4, 8), (1, 4))),
+  ("gather",           Layout((2, 3), (4, 1)),             Layout(6, 1)),
+  ("scatter",          Layout(6, 1),                       Layout((2, 3), (4, 1))),
+  ("broadcast",        Layout(7, 0),                       Layout(7, 1)),
+  ("constant",         Layout(7, 0),                       Layout(7, 0)),
+  ("tensor transpose", Layout((4, 6), (1, 4)),             Layout((4, (2, 3)), (1, (14, 4)))),
+  ("col-major",        Layout((4, 8), (1, 4)),             Layout((4, 8), (1, 4))),
+  ("row-major",        Layout((4, 8), (8, 1)),             Layout((4, 8), (8, 1))),
+  ("part bcast",       Layout((5, 4), (0, 1)),             Layout((5, 4), (4, 1))),
+  ("hierarchical",     Layout((4, (2, 3)), (1, (4, 12))),  Layout((4, 6), (1, 4))),
+  ("paper hier",       Layout(((2, 2), (2, 2)), ((8, 2), (4, 1))),
+                       Layout(((2, 2), (2, 2)), ((4, 2), (8, 1)))),
+  ("subdomain",        Layout((4, 3, 5), (1, 7, 42)),      Layout((6, 10), (1, 9))),
+  ("coprime",          Layout((5, 7), (7, 1)),             Layout((7, 5), (5, 1))),
+  ("rank1 to 2",       Layout(12, 1),                      Layout((3, 4), (4, 1))),
 ]
 
 
@@ -197,15 +202,25 @@ class TestCopyOpt(unittest.TestCase):
   def test_vector_is_contiguous_in_both_or_scalar(self):
     """The innermost run handed to `_memcpy` is `V:1` in *both* tensors, so
     the array copy only has to check alignment and hardware support. When no
-    common contiguous run exists, `V` is 1 and the dispatch is scalar."""
+    common contiguous run exists, `V` is 1 and the dispatch is scalar.
+
+    Every row of the Stage 3 table in examples/algorithms/copy.ipynb is here,
+    with the notebook's layouts, so that hand-written table cannot drift from
+    what `copy` does."""
     for label, src_layout, dst_layout, expect in [
-      ("memcpy",       Layout(8, 1),                      Layout(8, 1),           8),
-      ("hierarchical", Layout((4, (2, 3)), (1, (4, 12))),  Layout((4, 6), (1, 4)), 8),
-      ("part. bcast",  Layout((5, 4), (0, 1)),             Layout((5, 4), (4, 1)), 4),
-      ("subdomain",    Layout((4, 3, 5), (1, 7, 42)),      Layout((6, 10), (1, 9)), 2),
-      ("transpose",    Layout((4, 8), (8, 1)),             Layout((4, 8), (1, 4)), 1),
-      ("scatter",      Layout(6, 1),                       Layout((2, 3), (4, 1)), 1),
-      ("broadcast",    Layout(7, 0),                       Layout(7, 1),           1),
+      ("memcpy",       Layout(32, 1),                     Layout(32, 1),           32),
+      ("col-major",    Layout((4, 8), (1, 4)),            Layout((4, 8), (1, 4)),  32),
+      ("row-major",    Layout((4, 8), (8, 1)),            Layout((4, 8), (8, 1)),  32),
+      ("transpose",    Layout((4, 8), (8, 1)),            Layout((4, 8), (1, 4)),  1),
+      ("broadcast",    Layout(7, 0),                      Layout(7, 1),            1),
+      ("constant",     Layout(7, 0),                      Layout(7, 0),            1),
+      ("part bcast",   Layout((5, 4), (0, 1)),            Layout((5, 4), (4, 1)),  4),
+      ("hierarchical", Layout((4, (2, 3)), (1, (4, 12))), Layout((4, 6), (1, 4)),  8),
+      ("paper hier",   Layout(((2, 2), (2, 2)), ((8, 2), (4, 1))),
+                       Layout(((2, 2), (2, 2)), ((4, 2), (8, 1))),                 4),
+      ("subdomain",    Layout((4, 3, 5), (1, 7, 42)),     Layout((6, 10), (1, 9)), 2),
+      ("coprime",      Layout((5, 7), (7, 1)),            Layout((7, 5), (5, 1)),  1),
+      ("scatter",      Layout(6, 1),                      Layout((2, 3), (4, 1)),  1),
     ]:
       with self.subTest(label):
         src, dst = _vector_slices(src_layout, dst_layout)
@@ -248,26 +263,28 @@ class TestCopyOpt(unittest.TestCase):
 
 
 class TestCopyNotebook(unittest.TestCase):
-  """`examples/algorithms/copy.ipynb` prints `copy`'s source with
-  `inspect.getsource`, so its *stored* output is a verbatim second copy of this
-  module that goes stale the moment `copy` is edited."""
+  """`examples/algorithms/copy.ipynb` prints the source of both copies with
+  `inspect.getsource`, so each *stored* output is a verbatim second copy of that
+  source that goes stale the moment it is edited."""
 
-  def test_stored_source_output_is_current(self):
+  def test_stored_source_outputs_are_current(self):
     if not NOTEBOOK.exists():
       self.skipTest(f"{NOTEBOOK} not present")
     cells = json.loads(NOTEBOOK.read_text(encoding="utf-8"))["cells"]
-    printers = [
-      c for c in cells
-      if c["cell_type"] == "code" and "inspect.getsource(copy)" in "".join(c["source"])
-    ]
-    self.assertEqual(len(printers), 1, "expected exactly one cell printing copy's source")
 
-    stored = "".join(
-      "".join(o.get("text", []))
-      for o in printers[0]["outputs"] if o.get("output_type") == "stream"
-    )
-    self.assertEqual(stored.strip(), inspect.getsource(copy_opt).strip(),
-                     "re-run the notebook cell that prints `copy`'s source")
+    for name, obj in [("copy_ref", copy_ref), ("copy", copy_opt)]:
+      call = f"inspect.getsource({name})"
+      with self.subTest(call):
+        printers = [c for c in cells
+                    if c["cell_type"] == "code" and call in "".join(c["source"])]
+        self.assertEqual(len(printers), 1, f"expected exactly one cell calling {call}")
+
+        stored = "".join(
+          "".join(o.get("text", []))
+          for o in printers[0]["outputs"] if o.get("output_type") == "stream"
+        )
+        self.assertEqual(stored.strip(), inspect.getsource(obj).strip(),
+                         f"re-run the notebook cell that calls {call}")
 
 
 if __name__ == "__main__":

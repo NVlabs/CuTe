@@ -117,15 +117,15 @@ class TestEinsum:
     self._check("ij,ij->ij", dict(i=3, j=4))
 
   def test_scalar_scaling(self):
-    # Scalar product: every label is a batch mode of one side.
+    # Scalar product: B is rank-0, so every label is a row mode (in A and C only).
     self._check("i,->i", dict(i=5))
 
   def test_scalar_matrix(self):
-    # Scalar product: every label is a batch mode of one side.
+    # Scalar product: B is rank-0, so every label is a row mode (in A and C only).
     self._check("mn,->mn", dict(m=5, n=6))
 
   def test_scalar_transpose(self):
-    # Scalar product: every label is a batch mode of one side.
+    # Scalar product: B is rank-0, so every label is a row mode (in A and C only).
     self._check("mn,->nm", dict(m=5, n=6))
 
   def test_matrix_vector(self):
