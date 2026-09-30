@@ -244,3 +244,13 @@ class TestCoshape:
     assert make_basis_like(coprofile(L)) == (E(0), E(1))
     with pytest.raises(TypeError):
       coshape(L)
+
+  def test_coprofile_of_a_tiler(self):
+    """A tiler is profiled as `tiler_to_layout` promotes it: an integer is one
+    codomain axis, and a tuple gives each of its modes an axis of its own --
+    a `None` mode too, which the algebra leaves whole."""
+    for B in [24, (4, 8), ((2, 3), 4), (4, (2, 3)),
+              (Layout(4, 2), Layout(5, 3)), (Layout((2, 2), (1, 4)), 8)]:
+      assert congruent(coprofile(B), coprofile(tiler_to_layout(B)))
+    assert coprofile((None, 4)) == (0, 0)
+    assert coprofile((None, (2, 3))) == (0, (0, 0))

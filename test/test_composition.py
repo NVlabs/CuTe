@@ -279,6 +279,21 @@ class TestComposition:
     self.postcondition_composition(Layout((8, N), (X, Y)), Layout(4, 1))
     self.postcondition_composition(Layout((4, N), (X, Y)), Layout((2, 2), (2, 1)))
 
+  def test_composition_sympy_undecided_stride(self):
+    # Every 32nd element of a grid of (4, 4) tiles steps 2 tiles along m. Whether
+    # that stays in m, wraps onto n, or is refused depends on the grid's extent
+    # along m, so for a symbolic extent the stride condition is undecided, and an
+    # undecided condition is refused as violated rather than assumed to hold.
+    X, Y = sympy.symbols("X Y", positive=True, integer=True)
+    grid = lambda m: Layout((4, 4, m, Y), (E(0), E(1), 4*E(0), 4*E(1)))
+
+    assert composition(grid(2), Layout(3, 32)) == Layout(3, 4*E(1))
+    assert composition(grid(5), Layout(3, 32)) == Layout(3, 8*E(0))
+    with pytest.raises(ValueError, match="Shape divisibility"):
+      composition(grid(4), Layout(3, 32))
+    with pytest.raises(ValueError, match="Stride divisibility condition violated"):
+      composition(grid(X), Layout(3, 32))
+
   def test_composition_sympy_fails(self):
     # Dividing the concrete tile by a *symbolic* leading shape factor is an
     # unverifiable divisibility condition, so composition must raise rather

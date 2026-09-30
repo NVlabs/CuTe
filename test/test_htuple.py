@@ -74,6 +74,16 @@ class TestHTuple:
     assert product_each(((2, 3), 4)) == (6, 4)
     assert product_each(((2, (3, 4)), (5, 6), 7)) == (24, 30, 7)
 
+  def test_product_like(self):
+    """`product_like` collapses `s` beneath each leaf of the guide."""
+    assert product_like(((2, 4), 12), (0, 0)) == (8, 12)
+    assert product_like(((2, (3, 4)), 5), ((0, 0), 0)) == ((2, 12), 5)
+    # A leaf guide is `product`; a guide one level deep is `product_each`
+    assert product_like(((2, 4), 12), 0) == product(((2, 4), 12))
+    assert product_like(((2, 4), 12, (5, 6)), (0, 0, 0)) == product_each(((2, 4), 12, (5, 6)))
+    # The guide's leaf values are ignored; only its tree is read
+    assert product_like((8, 12), ("m", "n")) == (8, 12)
+
   def test_inner_product(self):
     assert inner_product(2, 3) == 6
     assert inner_product((1,2), (3,2)) == 7

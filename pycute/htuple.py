@@ -462,6 +462,25 @@ def product_each(s: HTuple) -> tuple:
   return tuple(product(x) for x in s)
 
 
+def product_like(s: HTuple, guide: Profile) -> HTuple:
+  """
+  The `product` of `s` at each leaf of `guide`.
+
+  Pre-conditions:
+    weakly_congruent(guide, s)
+
+  Post-conditions:
+    congruent(result, guide)
+    product(result) == product(s)
+
+  Examples:
+    product_like(((2, 4), 12), (0, 0))  == (8, 12)
+    product_like((8, 12), (0, 0))       == (8, 12)
+    product_like((8, 12), 0)            == 96
+  """
+  return transform_leaf(lambda g, x: product(x), guide, s)
+
+
 def slice_(htuple: Profile, B: HTuple, make=tuple) -> HTuple:
   """
   Collect the leaves of `B` whose counterpart in `htuple` is `None`.

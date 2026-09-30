@@ -9,7 +9,7 @@ links to the source and to the tests that exercise it.
 
 The reference is organized by module:
 
-* [`htuple`](#module-htuple) — `is_tuple`, `profile`, `congruent`, `weakly_congruent`, `wrap`, `unwrap`, `ModeOpDecorator`, `get`, `lift`, `replace`, `select`, `transform_apply_leaf`, `transform_leaf`, `leaves`, `zip_leaves`, `fold_leaf`, `flatten`, `unflatten`, `repeat_like`, `product`, `product_each`, `slice_`, `dice_`
+* [`htuple`](#module-htuple) — `is_tuple`, `profile`, `congruent`, `weakly_congruent`, `wrap`, `unwrap`, `ModeOpDecorator`, `get`, `lift`, `replace`, `select`, `transform_apply_leaf`, `transform_leaf`, `leaves`, `zip_leaves`, `fold_leaf`, `flatten`, `unflatten`, `repeat_like`, `product`, `product_each`, `product_like`, `slice_`, `dice_`
 * [`typedefs`](#module-typedefs) — `Integer`, `register_integer_type`, `is_int`, `is_static`, `static_true`, `divmod`, `StrideScalar`, `is_stride_scalar`, `HTuple`, `Profile`, `IntTuple`, `Shape`, `Coord`, `Stride`
 * [`stride`](#module-stride) — `stride`, `inner_product`, `prefix_product`, `coshape`, `coprofile`
 * [`shape`](#module-shape) — `shape`, `size`, `rank`, `depth`, `compatible`, `common_refinement`, `common_coarsening`, `idx2crd`, `crd2idx`, `coordinates`, `in_bounds`
@@ -485,6 +485,31 @@ product_each((2, 3))               == (2, 3)
 product_each(())                   == ()
 ```
 
+### `product_like(s, guide)`
+
+The `product` of `s` at each leaf of `guide`.
+
+*Pre-conditions:*
+
+```
+weakly_congruent(guide, s)
+```
+
+*Post-conditions:*
+
+```
+congruent(result, guide)
+product(result) == product(s)
+```
+
+*Examples:*
+
+```python
+product_like(((2, 4), 12), (0, 0))  == (8, 12)
+product_like((8, 12), (0, 0))       == (8, 12)
+product_like((8, 12), 0)            == 96
+```
+
 ### `slice_(htuple, B, make=tuple)`
 
 Collect the leaves of `B` whose counterpart in `htuple` is `None`.
@@ -815,6 +840,10 @@ carry no meaning.
 Read straight off the strides, so unlike `coshape` it stays defined for
 codomains whose extents cannot be bounded.
 
+A tiler is profiled as `tiler_to_layout` promotes it: an integer has a
+rank-1 codomain, and a tuple gives each of its modes an axis of its own --
+a `None` mode too, which the algebra leaves whole.
+
 *Post-conditions:*
 
 ```
@@ -826,6 +855,8 @@ congruent(coprofile(obj), coshape(obj))   wherever coshape is defined
 ```python
 congruent(coprofile(Layout((4, 8), (1, 4))), 0)            == True
 congruent(coprofile(Layout((4, 8), (E(0), E(1)))), (0, 0)) == True
+coprofile(24)                                              == 0
+coprofile((None, 4))                                       == (0, 0)
 ```
 
 ---

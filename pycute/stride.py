@@ -115,17 +115,27 @@ def coprofile(obj, *, mode=()) -> Profile:
   Read straight off the strides, so unlike `coshape` it stays defined for
   codomains whose extents cannot be bounded.
 
+  A tiler is profiled as `tiler_to_layout` promotes it: an integer has a
+  rank-1 codomain, and a tuple gives each of its modes an axis of its own --
+  a `None` mode too, which the algebra leaves whole.
+
   Post-conditions:
     congruent(coprofile(obj), coshape(obj))   wherever coshape is defined
 
   Examples:
     congruent(coprofile(Layout((4, 8), (1, 4))), 0)            == True
     congruent(coprofile(Layout((4, 8), (E(0), E(1)))), (0, 0)) == True
+    coprofile(24)                                              == 0
+    coprofile((None, 4))                                       == (0, 0)
   """
   if mode != ():
     return coprofile(get(obj, mode=mode))
   if hasattr(obj, '_coprofile'):     # Use ._coprofile() if available (Layouts/Other)
     return obj._coprofile()
+  if is_int(obj):                    # A tiler `obj:1`
+    return 0
+  if is_tuple(obj):                  # A by-mode tiler
+    return tuple(0 if b is None else coprofile(b) for b in obj)
   raise TypeError(f"coprofile not supported for type {type(obj)}")
 
 

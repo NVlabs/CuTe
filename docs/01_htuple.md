@@ -328,10 +328,28 @@ does not recurse to a single integer like `product`.
 
 (See [`test_htuple.py::TestHTuple::test_product_each`](../test/test_htuple.py).)
 
+### `product_like(s, guide)`
+
+The product of `s` *at each leaf of `guide`* — returns an HTuple congruent
+to `guide`, where each leaf is the product of the part of `s` beneath it.
+`guide` must be weakly congruent to `s`: no finer than `s`, anywhere. A
+guide one level deep gives `product_each`, and a leaf guide gives `product`.
+
+```python
+>>> product_like(((2, 4), 12), (0, 0))
+(8, 12)
+>>> product_like((8, 12), 0)
+96
+>>> product_like(((2, (3, 4)), 5), ((0, 0), 0))
+((2, 12), 5)
+```
+
+(See [`test_htuple.py::TestHTuple::test_product_like`](../test/test_htuple.py).)
+
 ## Related operations in other modules
 
-`product` and `product_each` live here; the stride helpers `prefix_product` and
-`inner_product` are defined in [`stride.py`](../pycute/stride.py) (see
+`product`, `product_each`, and `product_like` live here; the stride helpers
+`prefix_product` and `inner_product` are defined in [`stride.py`](../pycute/stride.py) (see
 [Shape and Stride](./02_shape_stride.md)). Coordinate conversion
 `idx2crd` / `crd2idx` and shape compatibility `compatible` live in
 [`shape.py`](../pycute/shape.py). The `zip_leaves` helper used internally by

@@ -485,7 +485,9 @@ codomain.
 * `coprofile(L)` — the codomain's *structure only*, congruent to `coshape(L)`
   but with meaningless leaf values. Used in `composition`, `complement`,
   `right_inverse`, and `left_inverse` to know whether they need to produce an
-  integer-codomain or a coordinate-codomain layout.
+  integer-codomain or a coordinate-codomain layout. A tiler is profiled as
+  `tiler_to_layout` promotes it: `coprofile(24)` is a leaf, and
+  `coprofile((None, 4))` is `(0, 0)`, one axis per mode.
 
 ```python
 >>> coshape(Layout((4, 8), (1, 4)))
