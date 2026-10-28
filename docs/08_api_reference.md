@@ -18,7 +18,7 @@ The reference is organized by module:
 * [`algebra`](#module-algebra) — `coalesce_z`, `coalesce`, `composition`, `right_inverse`, `left_inverse`, `complement`, `logical_product`, `logical_divide`, `zipped_divide`, `blocked_product`, `raked_product`, `nullspace`, `layout_add`, `greatest_common_domain`
 * [`swizzle`](#module-swizzle) — `F2`, `shiftr`, `shiftl`, `Swizzle`
 * [`accessor`](#module-accessor) — `Accessor`, `MutableAccessor`, `Ptr`, `Array`, `ImplicitAccessor`, `TransformAccessor`
-* [`tensor`](#module-tensor) — `Tensor`, `is_tensor`, `identity_tensor`, `make_tensor`
+* [`tensor`](#module-tensor) — `Tensor`, `is_tensor`, `identity_tensor`, `make_tensor`, `local_tile`
 * [`util.print_tensor`](#module-utilprint_tensor) — `print_tensor`
 * [`util.print_table`](#module-utilprint_table) — `print_table`
 * [`util.draw_svg`](#module-utildraw_svg) — `draw_svg`, `draw_svg_inv`, `draw_svg_tv`
@@ -2006,9 +2006,9 @@ logical_divide(None, Layout(4, 2))               == Layout((4, (2, 1)), (2, (1, 
 Logical divide of `A` by the tiler `B`, with `B` promoted to a Layout first.
 
 Equivalent to `logical_divide(A, tiler_to_layout(B))`. Promoting the tiler `B`
-to a single Layout zips the tile modes together and the remainder modes
-together, so the result is `((tile...), (rest...))` rather than
-`logical_divide`'s per-mode interleaving.
+to a single Layout zips the tile modes together and the grid modes together,
+so the result is `((tile...), (grid...))` rather than `logical_divide`'s
+per-mode interleaving.
 
 A non-empty `mode` divides only that mode of `A` and leaves every other mode
 unchanged; a negative index counts from the end.
@@ -2552,6 +2552,43 @@ coshape(layout) is an Integer; a coordinate codomain raises a ValueError
 shape(make_tensor(Layout((4, 4), (4, 1))))  == (4, 4)
 make_tensor((2, 3)).layout                  == Layout((2, 3), (1, 2))
 make_tensor(Layout((2, 2), (E(0), E(1))))   -> ValueError
+```
+
+### `local_tile(tensor, tiler, coord)`
+
+The tile of `tensor` at `coord` in the grid of `tiler`-shaped tiles.
+
+`zipped_divide` splits `tensor` into `(Tile, Grid)`, where `Grid` is the grid
+of tiles, and `coord` slices `Grid`, so the result is the `Tile` mode followed
+by the modes of `Grid` that `coord` marks `None`.
+
+*Pre-conditions:*
+
+```
+is_tensor(tensor); otherwise a TypeError is raised
+weakly_congruent(coord, shape[1](zipped_divide(tensor, tiler))); otherwise a ValueError is raised
+```
+
+*Post-conditions:*
+
+```
+result == zipped_divide(tensor, tiler)[None, coord]
+compatible(tiler, shape[0](result))
+```
+
+*Examples:*
+
+```python
+I = identity_tensor((8, 12))
+shape(local_tile(I, (4, 6), (1, 1)))         == ((4, 6),)
+local_tile(I, (4, 6), (1, 1))[(3, 5),]       == (7, 11)
+local_tile(I, (4, 6), 3)                     == local_tile(I, (4, 6), (1, 1))
+shape(local_tile(I, (4, 6), (1, None)))      == ((4, 6), 2)
+local_tile(I, (4, 6), (1, None))[(3, 5), 1]  == (7, 11)
+local_tile(I, (4, 6), (1,))                  -> ValueError
+tiler, coord = (32, 64, 4), (1, 2, None)     # (BLK_M, BLK_N, BLK_K), (m, n, k)
+shape(local_tile(identity_tensor((128, 16)), select[0, 2](tiler), select[0, 2](coord)))
+    == ((32, 4), 4)
 ```
 
 ---

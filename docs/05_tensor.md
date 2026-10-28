@@ -282,6 +282,62 @@ for an extended example, and
 [`test_tensor.py::TestIdentityTensor`](../test/test_tensor.py)
 for the checked behavior.)
 
+## `local_tile(tensor, tiler, coord)`
+
+`local_tile` is how a block takes its tile of a larger tensor, as C++
+`cute::local_tile` does: `zipped_divide` the tensor into `(Tile, Grid)`, where
+`Grid` is the grid of tiles, then slice `Grid` with `coord`. That slice is the
+whole implementation:
+
+```python
+>>> I = identity_tensor((8, 12))
+>>> local_tile(I, (4, 6), (1, 1))                     # the tile at block (1, 1)
+Tensor({(4,6)}, ((4, 6),):((1@0, 1@1),))
+>>> zipped_divide(I, (4, 6))[None, (1, 1)]            # the same, by hand
+Tensor({(4,6)}, ((4, 6),):((1@0, 1@1),))
+>>> local_tile(I, (4, 6), (1, 1))[(3, 5),]            # element (3, 5) of the tile
+(7,11)
+```
+
+The tile stays a single mode, mode 0 of the result, and the grid modes that
+`coord` marks `None` follow it: `local_tile(I, (4, 6), (1, None))` is every tile
+in block-row 1, of shape `((4, 6), 2)`. `coord` names every grid mode, including
+those of tensor modes the tiler does not reach, so for a rank-3 tensor and a
+rank-2 tiler `(m, n, None)` keeps the third mode and `(m, n, l)` slices it. An
+integer `coord` instead indexes the whole grid in colexicographical order, so
+`local_tile(I, (4, 6), 3)` is the tile at `(1, 1)`.
+
+C++'s `local_tile` also takes a projection, which lets one tiler serve several
+tensors, as in the
+[CuTe GEMM tutorial](https://github.com/NVIDIA/cutlass/blob/main/media/docs/cpp/cute/0x_gemm_tutorial.md),
+where a single `(BLK_M, BLK_N, BLK_K)` tiler and `(m, n, k)` coordinate tile all
+three operands. The projection `Step<_1, X, _1>` is shorthand for keeping modes 0
+and 2 of both, which PyCuTe spells with `select`:
+
+```python
+>>> tiler, coord = (32, 64, 4), (1, 2, None)          # (BLK_M, BLK_N, BLK_K), (m, n, k)
+>>> A, B, C = identity_tensor((128, 16)), identity_tensor((256, 16)), identity_tensor((128, 256))
+>>> shape(local_tile(A, select[0, 2](tiler), select[0, 2](coord)))   # ((BLK_M, BLK_K), k)
+((32, 4), 4)
+>>> shape(local_tile(B, select[1, 2](tiler), select[1, 2](coord)))   # ((BLK_N, BLK_K), k)
+((64, 4), 4)
+>>> shape(local_tile(C, select[0, 1](tiler), select[0, 1](coord)))   # ((BLK_M, BLK_N),)
+((32, 64),)
+```
+
+The tile of a data tensor is a view sharing its storage. The tiler need not
+divide the tensor's extents, in which case the last tiles reach past the tensor,
+and the same tile of an identity tensor gives the coordinates to predicate them
+with:
+
+```python
+>>> tile = local_tile(identity_tensor((10, 10)), (4, 4), (2, 2))
+>>> tile[(3, 3),], in_bounds(tile[(3, 3),], (10, 10))
+((11,11), False)
+```
+
+(See [`test_tensor.py::TestLocalTile`](../test/test_tensor.py).)
+
 ## `print_tensor`
 
 [`print_tensor(t)`](../pycute/util/print_tensor.py) renders a tensor of
@@ -357,8 +413,8 @@ logic. Keeping them separate has several benefits:
   [`pycute/accessor.py`](../pycute/accessor.py),
   [`pycute/util/print_tensor.py`](../pycute/util/print_tensor.py).
 * Tests: [`test/test_tensor.py`](../test/test_tensor.py)
-  for `Tensor`, `Accessor`, `make_tensor`, `identity_tensor`, slicing,
-  and tensor-algebra pass-through. Indirect coverage of `Tensor` also
+  for `Tensor`, `Accessor`, `make_tensor`, `identity_tensor`, `local_tile`,
+  slicing, and tensor-algebra pass-through. Indirect coverage of `Tensor` also
   comes from the algebra tests
   ([`test_logical_divide.py`](../test/test_logical_divide.py),
   [`test_composition.py`](../test/test_composition.py)).

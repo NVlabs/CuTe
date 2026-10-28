@@ -292,3 +292,119 @@ class TestIdentityTensor:
     row = I[1, None]
     for j in range(4):
       assert row[j] == (1, j)
+
+
+class TestLocalTile:
+
+  def test_tile_matches_parent(self):
+    """Element `(i, j)` of tile `(m, n)` is element `(m*BM + i, n*BN + j)` of the parent.
+    The tile is a single mode of the result, so `(i, j)` is that mode's coordinate."""
+    T = make_tensor(Layout((8, 12), (12, 1)), dtype=ctypes.c_int)
+    for i in range(size(T)):
+      T[i] = i
+
+    for m in range(2):
+      for n in range(2):
+        tile = local_tile(T, (4, 6), (m, n))
+        assert shape(tile) == ((4, 6),)
+        for i in range(4):
+          for j in range(6):
+            assert tile[(i, j),] == T[m * 4 + i, n * 6 + j]
+
+  def test_tile_is_a_view(self):
+    """A tile shares the parent's storage, so a write through it lands in the parent."""
+    T = make_tensor(Layout((8, 12)))
+    local_tile(T, (4, 6), (1, 1))[(3, 5),] = 42.0
+    assert T[7, 11] == 42.0
+
+  def test_none_keeps_grid_modes(self):
+    """The grid modes `coord` marks `None` follow the tile, in order."""
+    I = identity_tensor((8, 12))
+
+    row = local_tile(I, (4, 6), (1, None))        # every tile in block-row 1
+    assert shape(row) == ((4, 6), 2)
+    assert [row[(0, 0), n] for n in range(2)] == [(4, 0), (4, 6)]
+
+    col = local_tile(I, (4, 6), (None, 1))        # every tile in block-column 1
+    assert shape(col) == ((4, 6), 2)
+    assert [col[(0, 0), m] for m in range(2)] == [(0, 6), (4, 6)]
+
+    assert local_tile(I, (4, 6), None) == zipped_divide(I, (4, 6))
+
+  def test_trailing_modes_are_named(self):
+    """A tensor mode the tiler does not reach is still a grid mode, which `coord` names."""
+    I = identity_tensor((8, 12, 3))
+
+    tile = local_tile(I, (4, 6), (1, 1, None))
+    assert shape(tile) == ((4, 6), 3)
+    for l in range(3):
+      assert tile[(3, 5), l] == (7, 11, l)
+    assert local_tile(I, (4, 6), (1, 1, 2)) == tile[None, 2]
+
+    with pytest.raises(ValueError):
+      local_tile(I, (4, 6), (1, 1))
+
+  def test_integer_coord_indexes_all_tiles(self):
+    """An Integer coord indexes the grid colexicographically, trailing modes included."""
+    I = identity_tensor((8, 12, 3))
+    grid = shape[1](zipped_divide(I, (4, 6)))     # (2, 2, 3)
+    for t in range(size(grid)):
+      assert local_tile(I, (4, 6), t) == local_tile(I, (4, 6), idx2crd(t, grid))
+
+  def test_gemm_operands_share_a_tiler(self):
+    """One (BLK_M, BLK_N, BLK_K) tiler and coord serve all three GEMM operands, each
+    selecting its modes; this is what the C++ projection `Step<_1, X, _1>` spells."""
+    M, N, K = 128, 256, 16
+    A, B, C = identity_tensor((M, K)), identity_tensor((N, K)), identity_tensor((M, N))
+    tiler, coord = (32, 64, 4), (1, 2, None)
+
+    ctaA = local_tile(A, select[0, 2](tiler), select[0, 2](coord))    # ((BLK_M, BLK_K), k)
+    ctaB = local_tile(B, select[1, 2](tiler), select[1, 2](coord))    # ((BLK_N, BLK_K), k)
+    ctaC = local_tile(C, select[0, 1](tiler), select[0, 1](coord))    # ((BLK_M, BLK_N),)
+    assert shape(ctaA) == ((32, 4), K // 4)
+    assert shape(ctaB) == ((64, 4), K // 4)
+    assert shape(ctaC) == ((32, 64),)
+
+    # Slice k of the A and B tiles is their k-th BLK_K-wide panel
+    for k in range(K // 4):
+      assert ctaA[(0, 0), k] == (32, 4 * k)
+      assert ctaB[(0, 0), k] == (128, 4 * k)
+    assert ctaC[(0, 0),] == (32, 128)
+
+  def test_general_tilers(self):
+    """A tiler of Layouts selects strided tiles; an Integer tiler tiles the tensor as 1-D."""
+    I = identity_tensor((8, 12))
+
+    tile = local_tile(I, (Layout(4, 2), 6), (1, 1))     # every other row, from row 1
+    assert shape(tile) == ((4, 6),)
+    assert [tile[(i, 0),] for i in range(4)] == [(1, 6), (3, 6), (5, 6), (7, 6)]
+
+    tile = local_tile(I, 16, 3)                         # the 4th run of 16, in colex order
+    assert [tile[i] for i in range(16)] == [I[48 + i] for i in range(16)]
+
+  def test_residue_tiles_reach_past_the_tensor(self):
+    """The tiler need not divide the tensor: an identity tensor tiled the same way
+    gives the coordinates to predicate the out-of-bounds elements with."""
+    I = identity_tensor((10, 10))
+    tile = local_tile(I, (4, 4), (2, 2))                # the corner tile, rows/cols 8..11
+    assert tile[(0, 0),] == (8, 8)
+    assert [in_bounds(tile[(i, i),], (10, 10)) for i in range(4)] == [True, True, False, False]
+
+  def test_symbolic_extents_and_coord(self):
+    """A run-time problem size and block index give the tile origin symbolically."""
+    sympy = pytest.importorskip("sympy")
+    M, N, bx, by = sympy.symbols("M N bx by", positive=True, integer=True)
+
+    tile = local_tile(identity_tensor((M, N)), (32, 64), (bx, by))
+    assert shape(tile) == ((32, 64),)
+    assert tile[(0, 0),] == (32 * bx, 64 * by)
+    assert tile[(31, 63),] == (32 * bx + 31, 64 * by + 63)
+
+  def test_errors(self):
+    I = identity_tensor((8, 12))
+    with pytest.raises(TypeError):
+      local_tile(Layout((8, 12)), (4, 6), (1, 1))       # no accessor to carry the offset
+    with pytest.raises(ValueError):
+      local_tile(I, (4, 6), (1,))                       # fewer coord modes than grid modes
+    with pytest.raises(ValueError):
+      local_tile(I, (4, 6), (1, 1, 0))                  # more coord modes than grid modes

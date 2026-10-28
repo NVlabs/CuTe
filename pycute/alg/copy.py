@@ -77,8 +77,8 @@ def copy(src: Tensor, dst: Tensor) -> None:
   except TypeError:
     pass
 
-  src_v = logical_divide(src_v, vec_size)     # (V:1, Rest)
-  dst_v = logical_divide(dst_v, vec_size)     # (V:1, Rest)
+  src_v = logical_divide(src_v, vec_size)     # (V:1, Grid)
+  dst_v = logical_divide(dst_v, vec_size)     # (V:1, Grid)
 
   # Slice and dispatch to an optimized/vectorized memcpy
 

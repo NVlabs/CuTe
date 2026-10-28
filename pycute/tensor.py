@@ -160,3 +160,42 @@ def make_tensor(layout: Layout | Shape, dtype=ctypes.c_double) -> Tensor:
   if not is_int(N):
     raise ValueError(f"make_tensor({dtype}, {layout}): Non-integer codomain {N}")
   return Tensor(Array(N, dtype), layout)
+
+
+def local_tile(tensor: Tensor, tiler: Tiler, coord: Coord) -> Tensor:
+  """
+  The tile of `tensor` at `coord` in the grid of `tiler`-shaped tiles.
+
+  `zipped_divide` splits `tensor` into `(Tile, Grid)`, where `Grid` is the grid
+  of tiles, and `coord` slices `Grid`, so the result is the `Tile` mode followed
+  by the modes of `Grid` that `coord` marks `None`.
+
+  Pre-conditions:
+    is_tensor(tensor); otherwise a TypeError is raised
+    weakly_congruent(coord, shape[1](zipped_divide(tensor, tiler))); otherwise a ValueError is raised
+
+  Post-conditions:
+    result == zipped_divide(tensor, tiler)[None, coord]
+    compatible(tiler, shape[0](result))
+
+  Examples:
+    I = identity_tensor((8, 12))
+    shape(local_tile(I, (4, 6), (1, 1)))         == ((4, 6),)
+    local_tile(I, (4, 6), (1, 1))[(3, 5),]       == (7, 11)
+    local_tile(I, (4, 6), 3)                     == local_tile(I, (4, 6), (1, 1))
+    shape(local_tile(I, (4, 6), (1, None)))      == ((4, 6), 2)
+    local_tile(I, (4, 6), (1, None))[(3, 5), 1]  == (7, 11)
+    local_tile(I, (4, 6), (1,))                  -> ValueError
+    tiler, coord = (32, 64, 4), (1, 2, None)     # (BLK_M, BLK_N, BLK_K), (m, n, k)
+    shape(local_tile(identity_tensor((128, 16)), select[0, 2](tiler), select[0, 2](coord)))
+        == ((32, 4), 4)
+  """
+  if not is_tensor(tensor):
+    raise TypeError(f"local_tile({tensor}, {tiler}, {coord}): Expected a Tensor")
+
+  tiled = zipped_divide(tensor, tiler)  # (Tile, Grid)
+
+  if not weakly_congruent(coord, shape[1](tiled)):
+    raise ValueError(f"local_tile({tensor}, {tiler}, {coord}): coord does not match grid shape {shape[1](tiled)}")
+
+  return tiled[None, coord]             # (Tile, Grid Slices...)

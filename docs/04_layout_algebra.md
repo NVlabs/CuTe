@@ -386,9 +386,10 @@ subscript, each rebuilding `A` with only the named mode changed:
 
 `logical_divide` preserves *semantics* of each mode (M-mode in, M-mode out)
 but the resulting modes are
-`((TileM, RestM), (TileN, RestN), ...)`. Often you want them rearranged.
+`((TileM, GridM), (TileN, GridN), ...)`. Often you want them rearranged.
 
-PyCuTe implements `zipped_divide` (zips tiles together and rest together):
+PyCuTe implements `zipped_divide` (zips the tile modes together and the grid
+modes together):
 
 ```python
 >>> A = Layout((9, 32), ...)

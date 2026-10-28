@@ -372,9 +372,9 @@ def zipped_divide(A, B: Tiler, *, mode=()):
   Logical divide of `A` by the tiler `B`, with `B` promoted to a Layout first.
 
   Equivalent to `logical_divide(A, tiler_to_layout(B))`. Promoting the tiler `B`
-  to a single Layout zips the tile modes together and the remainder modes
-  together, so the result is `((tile...), (rest...))` rather than
-  `logical_divide`'s per-mode interleaving.
+  to a single Layout zips the tile modes together and the grid modes together,
+  so the result is `((tile...), (grid...))` rather than `logical_divide`'s
+  per-mode interleaving.
 
   A non-empty `mode` divides only that mode of `A` and leaves every other mode
   unchanged; a negative index counts from the end.
